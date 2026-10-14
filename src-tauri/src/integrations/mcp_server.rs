@@ -104,6 +104,12 @@ fn tool_defs() -> Value {
     let id = json!({ "type": "string" });
     let inputs = json!({ "type": "object", "description": "input values keyed by the manifest's [inputs] names" });
     json!([
+        { "name": "app_activity", "description": "What an app is doing right now: current run (pid, port, elapsed, live log tail), live CPU/RAM, last finished run with exit code and log tail, recent runs, latest outputs, open agent sessions. Call this to catch up on anything the user did in the Homemade window.", "inputSchema": s(json!({ "app_id": id, "lines": { "type": "integer", "default": 40 } }), &["app_id"]) },
+        { "name": "app_usage", "description": "Per-program resource usage: current CPU%/RAM/GPU of the app's run, its peak, and 1 Hz samples for the last `seconds` (≤300).", "inputSchema": s(json!({ "app_id": id, "seconds": { "type": "integer", "default": 60 } }), &["app_id"]) },
+        { "name": "app_processes", "description": "Process tree of the app's running program: leader pid, pgid, port, and every process in the group with cpu% and RSS.", "inputSchema": s(json!({ "app_id": id }), &["app_id"]) },
+        { "name": "signal_run", "description": "Send a POSIX signal (INT, TERM, KILL, HUP, USR1, USR2, STOP, CONT, QUIT) to a run's process group (or only the leader).", "inputSchema": s(json!({ "run_id": id, "signal": { "type": "string" }, "leader_only": { "type": "boolean" } }), &["run_id", "signal"]) },
+        { "name": "write_stdin", "description": "Write text to the running program's stdin (include a trailing newline for line-reading programs; close=true then closes stdin).", "inputSchema": s(json!({ "run_id": id, "data": { "type": "string" }, "close": { "type": "boolean" } }), &["run_id", "data"]) },
+        { "name": "capture", "description": "Screenshot the program's window (its solo window if open, else the Homemade main window) to a PNG; returns {path}. macOS only. Read the PNG to see what the user sees.", "inputSchema": s(json!({ "app_id": id, "path": { "type": "string" } }), &[]) },
         { "name": "status", "description": "Is the Homemade GUI running? Returns {running, version, active_runs, model} or {running:false}.", "inputSchema": s(json!({}), &[]) },
         { "name": "launch_gui", "description": "Start the Homemade GUI if it is not running and wait for it (needed for every tool that runs or controls programs).", "inputSchema": s(json!({}), &[]) },
         { "name": "import_app", "description": "Register a project folder (or a script; its folder is used) with Homemade. Infers homemade.toml when absent. Returns the app record.", "inputSchema": s(json!({ "path": { "type": "string" } }), &["path"]) },
@@ -134,8 +140,8 @@ fn tool_defs() -> Value {
           "inputSchema": s(json!({ "app_id": { "type": "string" } }), &["app_id"]) },
         { "name": "list_runs", "description": "List an app's runs, newest first.",
           "inputSchema": s(json!({ "app_id": { "type": "string" }, "limit": { "type": "integer", "minimum": 1, "maximum": 500, "default": 20 } }), &["app_id"]) },
-        { "name": "get_run_log", "description": "Get the log tail of a run.",
-          "inputSchema": s(json!({ "run_id": { "type": "string" } }), &["run_id"]) },
+        { "name": "get_run_log", "description": "Log of a run (live ring buffer while running, stored tail after). With `offset`, returns {lines, next, total, active} from that line on, for incremental tailing: pass back `next` on the following call.",
+          "inputSchema": s(json!({ "run_id": { "type": "string" }, "offset": { "type": "integer" } }), &["run_id"]) },
         { "name": "last_failed_run", "description": "Most recent failed/killed run of an app with its log tail, or null.",
           "inputSchema": s(json!({ "app_id": { "type": "string" } }), &["app_id"]) },
         { "name": "list_artifacts", "description": "List artifact files produced by an app (optionally for one run).",
@@ -175,7 +181,7 @@ fn call_tool(name: &str, args: &Value, db: &mut Option<Connection>) -> std::resu
         let v = crate::control::client::call(method, &params)?;
         return Ok(match name {
             "last_failed_run" => v.as_array().and_then(|a| a.iter().find(|r| r["status"] == "failed" || r["status"] == "killed").cloned()).unwrap_or(Value::Null),
-            "get_run_log" => json!({ "run_id": args["run_id"], "log": v }),
+            "get_run_log" => if args.get("offset").is_some() { v } else { json!({ "run_id": args["run_id"], "log": v }) },
             _ => v,
         });
     }

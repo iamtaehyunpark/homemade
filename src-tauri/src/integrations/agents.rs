@@ -236,7 +236,10 @@ For a custom UI, use the injected `window.homemade` bridge instead of a web serv
 You can drive Homemade itself at any time: the `homemade` MCP server is connected (tools: start_run, wait_run, get_run_log, \
 last_failed_run, explain_run, list_artifacts, apply_manifest, git_checkpoint, open_app, …), and the `homemade` CLI is on PATH \
 (`homemade run {app_id} key=value --wait`, `homemade log <run-id>`, `homemade help`). Use them to run and verify this app \
-yourself instead of asking the user to click Run.",
+yourself instead of asking the user to click Run. Homemade also posts live status into this session as messages starting \
+with `[homemade]` whenever a run of this app starts, finishes or gets a diagnosis — including runs the user starts from the \
+Homemade window. Treat them as ground truth about the running program and react (inspect, fix, re-run); call `app_activity` \
+to catch up at any time.",
         root = root.display(), app_id = app_id
     );
     if let Some(tail) = last_failed_tail.filter(|t| !t.trim().is_empty()) {

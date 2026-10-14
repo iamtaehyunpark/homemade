@@ -17,6 +17,8 @@ pub struct AppState {
     pub active_ptys: DashMap<String, Arc<crate::supervisor::pty_manager::ActivePty>>,
     pub vram_queue: Mutex<VecDeque<PendingJob>>,
     pub resources: std::sync::Mutex<crate::types::ResourceSnapshot>,
+    /// Last ~5 min of snapshots (1/s) so CLI/MCP can report per-program usage over time.
+    pub usage_history: std::sync::Mutex<VecDeque<crate::types::ResourceSnapshot>>,
     pub app_handle: tauri::AppHandle,
     /// Apple on-device model helper (spawned on demand).
     pub model: Arc<crate::intelligence::local_model::LocalModel>,

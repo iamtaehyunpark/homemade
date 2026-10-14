@@ -192,6 +192,8 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
         let _ = queries::set_run_status(&c, &job.run_id, "running");
         let _ = queries::set_run_pgid(&c, &job.run_id, pid);
     }
+    crate::supervisor::pty_manager::inject_notice(state.clone(), &job.app_id,
+        format!("[homemade] Run {} of {} STARTED (pid {pid}): {}", &job.run_id[..8.min(job.run_id.len())], job.app_id, job.cli_command));
     emit_status(&state, &job.run_id);
 
     let t_out = stdout.map(|s| tauri::async_runtime::spawn(pump(state.clone(), run.clone(), s, false)));
@@ -298,6 +300,23 @@ async fn finalize(
     }
     state.active_runs.remove(&run.run_id);
     emit_status(&state, &run.run_id);
+    // Tell any agent working on this app what just happened (it may then fix + re-run via MCP/CLI).
+    {
+        let secs = (now - run.started_at).max(0) as f64 / 1000.0;
+        let short = &run.run_id[..8.min(run.run_id.len())];
+        let notice = if final_status == "success" {
+            let arts = { let c = state.db.lock().unwrap(); queries::list_artifacts(&c, &run.app_id, Some(&run.run_id), Some("output")).unwrap_or_default() };
+            let names: Vec<String> = arts.iter().take(5).map(|a| std::path::Path::new(&a.file_path).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default()).collect();
+            format!("[homemade] Run {short} of {} SUCCEEDED in {secs:.1}s{}. (get_run_log(\"{}\") for the full log.)", run.app_id,
+                if arts.is_empty() { String::new() } else { format!("; {} output{}: {}", arts.len(), if arts.len() == 1 { "" } else { "s" }, names.join(", ")) }, run.run_id)
+        } else {
+            let last: Vec<&str> = tail.lines().rev().filter(|l| !l.trim().is_empty()).take(4).collect();
+            let last: Vec<&str> = last.into_iter().rev().collect();
+            format!("[homemade] Run {short} of {} {} after {secs:.1}s (exit {}). Last lines: {} — fix it, then verify with start_run + wait_run.", run.app_id,
+                final_status.to_uppercase(), code.map(|c| c.to_string()).unwrap_or_else(|| "?".into()), last.join(" ⏎ "))
+        };
+        crate::supervisor::pty_manager::inject_notice(state.clone(), &run.app_id, notice);
+    }
     if final_status == "failed" { spawn_health_check(state.clone(), &run); }
     notify_scheduler(state).await;
 }
@@ -309,6 +328,7 @@ fn spawn_health_check(state: Arc<AppState>, run: &Arc<ActiveRun>) {
         log.iter().skip(log.len().saturating_sub(120)).map(|l| secrets::redact(l, &run.secrets)).collect()
     };
     let run_id = run.run_id.clone();
+    let app_id = run.app_id.clone();
     tauri::async_runtime::spawn(async move {
         let Some(rep) = state.assistor.analyze_log_window(&lines).await else { return };
         {
@@ -318,6 +338,7 @@ fn spawn_health_check(state: Arc<AppState>, run: &Arc<ActiveRun>) {
         }
         state.emit("run://health", serde_json::json!({ "runId": run_id, "severity": rep.severity, "message": rep.message }));
         emit_status(&state, &run_id);
+        crate::supervisor::pty_manager::inject_notice(state.clone(), &app_id, format!("[homemade] Diagnosis for run {}: {}", &run_id[..8.min(run_id.len())], rep.message));
     });
 }
 

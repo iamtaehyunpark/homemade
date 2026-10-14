@@ -17,6 +17,9 @@ interface HomemadeStore {
   /** Apps currently living in their own solo window (main window only). */
   windowed: Record<string, true>;
   setWindowed: (appId: string, on: boolean) => void;
+  /** Element picker: click anything in the launcher to mention it in the agent session. */
+  selectMode: boolean;
+  setSelectMode: (on: boolean) => void;
   artifactTick: Record<string, number>;
   toast: string | null;
   queued: Record<string, QueuedJobInfo>; // by run id, from run://queued
@@ -57,6 +60,8 @@ export const useStore = create<HomemadeStore>((set) => ({
   view: "workbench",
   confirmExit: null,
   windowed: {},
+  selectMode: false,
+  setSelectMode: (on) => set({ selectMode: on }),
   setWindowed: (appId, on) => set((s) => { const w = { ...s.windowed }; if (on) w[appId] = true; else delete w[appId]; return { windowed: w }; }),
   artifactTick: {},
   toast: null,

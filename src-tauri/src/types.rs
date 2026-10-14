@@ -86,6 +86,9 @@ pub struct StorageRef {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceSnapshot {
+    /// Sample time (ms since epoch); set on history samples.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub t: Option<i64>,
     pub cpu_pct: f32,
     pub ram_used_mb: u64,
     pub ram_total_mb: u64,

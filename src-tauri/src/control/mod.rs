@@ -129,7 +129,8 @@ pub const METHODS: &[&str] = &[
     "list_artifacts", "list_presets", "save_preset", "delete_preset",
     "git_status", "git_init", "git_checkpoint", "git_revert_to",
     "resource_snapshot", "list_listening_ports", "kill_port_owner", "app_process_info", "explain_run", "model_status",
-    "list_agent_sessions", "storage_summary", "open_app", "close_window", "show_view",
+    "list_agent_sessions", "storage_summary", "open_app", "close_window", "show_view", "app_activity",
+    "app_usage", "app_processes", "signal_run", "write_stdin", "capture",
 ];
 
 pub async fn dispatch(st: &Arc<AppState>, method: &str, p: &Value) -> Result<Value, String> {
@@ -206,11 +207,108 @@ pub async fn dispatch(st: &Arc<AppState>, method: &str, p: &Value) -> Result<Val
             j(out)
         }
         "get_run_log" => {
+            // Plain call → array of lines. With `offset` → {lines (from offset), next (offset for the next poll), total, active}:
+            // agents/CLIs tail a run incrementally without re-reading.
             let id = s(p, "run_id")?;
-            if let Some(run) = st.active_runs.get(id).map(|r| r.value().clone()) {
-                return Ok(json!(run.log.lock().unwrap().iter().cloned().collect::<Vec<_>>()));
+            let active = st.active_runs.get(id).map(|r| r.value().clone());
+            let lines: Vec<String> = match &active {
+                Some(run) => run.log.lock().unwrap().iter().cloned().collect(),
+                None => { let c = st.db.lock().unwrap(); crate::db::queries::get_run(&c, id).map_err(e)?.and_then(|r| r.log_tail).map(|t| t.lines().map(String::from).collect()).unwrap_or_default() }
+            };
+            match p.get("offset").and_then(|v| v.as_u64()) {
+                None => Ok(json!(lines)),
+                Some(off) => {
+                    // The live buffer is a 5000-line ring: offsets count lines *emitted*, so clamp when the ring has rolled.
+                    let total = lines.len() as u64;
+                    let start = off.min(total) as usize;
+                    Ok(json!({ "lines": &lines[start..], "next": total, "total": total, "active": active.is_some() }))
+                }
             }
-            db(&|c| crate::db::queries::get_run(c, id).map(|r| json!(r.and_then(|r| r.log_tail).map(|t| t.lines().map(String::from).collect::<Vec<_>>()).unwrap_or_default())))
+        }
+        // Per-program usage: current sample + up to 5 min of 1 Hz history for this app's runs.
+        "app_usage" => {
+            let id = s(p, "app_id")?;
+            let secs = p.get("seconds").and_then(|v| v.as_u64()).unwrap_or(60) as usize;
+            let h = st.usage_history.lock().unwrap();
+            let samples: Vec<Value> = h.iter().rev().take(secs).filter_map(|snap| {
+                let u = snap.per_run.iter().find(|u| u.app_id == id)?;
+                Some(json!({ "t": snap.t, "runId": u.run_id, "cpuPct": u.cpu_pct, "ramMb": u.ram_mb, "vramMb": u.vram_mb, "systemCpuPct": snap.cpu_pct, "systemRamUsedMb": snap.ram_used_mb, "gpuUsedMb": snap.gpu_used_mb }))
+            }).collect::<Vec<_>>().into_iter().rev().collect();
+            let current = st.resources.lock().unwrap().per_run.iter().find(|u| u.app_id == id).cloned();
+            let peak = st.active_runs.iter().find(|r| r.value().app_id == id).map(|r| json!({ "ramMb": r.peak_ram_mb.load(std::sync::atomic::Ordering::Relaxed), "vramMb": r.peak_vram_mb.load(std::sync::atomic::Ordering::Relaxed) }));
+            Ok(json!({ "appId": id, "current": current, "peak": peak, "samples": samples, "intervalMs": 1000 }))
+        }
+        // The whole process tree of the app's run (pgid), with per-process CPU/RSS from sysinfo.
+        "app_processes" => {
+            let id = s(p, "app_id")?;
+            let Some(run) = st.active_runs.iter().find(|r| r.value().app_id == id).map(|r| r.value().clone()) else { return Ok(json!({ "appId": id, "runId": null, "processes": [] })) };
+            let pgid = run.pgid;
+            let procs = tokio::task::spawn_blocking(move || {
+                use sysinfo::{ProcessesToUpdate, System};
+                let mut sys = System::new();
+                sys.refresh_processes(ProcessesToUpdate::All, true);
+                let mut out = vec![];
+                for (pid, pr) in sys.processes() {
+                    let raw = pid.as_u32() as i32;
+                    let gid = unsafe { libc::getpgid(raw) };
+                    if gid != pgid && raw != pgid { continue; }
+                    out.push(json!({ "pid": raw, "parentPid": pr.parent().map(|x| x.as_u32()), "name": pr.name().to_string_lossy(),
+                        "cmd": pr.cmd().iter().map(|c| c.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" "),
+                        "cpuPct": pr.cpu_usage(), "rssMb": pr.memory() / (1024 * 1024), "status": format!("{:?}", pr.status()), "startTime": pr.start_time() }));
+                }
+                out.sort_by_key(|p| p["pid"].as_i64());
+                out
+            }).await.map_err(|x| x.to_string())?;
+            Ok(json!({ "appId": id, "runId": run.run_id, "pid": run.pid, "pgid": pgid, "port": *run.port.lock().unwrap(), "processes": procs }))
+        }
+        // Raw control: a POSIX signal to the run's process group (or just the leader with `leader_only`).
+        "signal_run" => {
+            let id = s(p, "run_id")?;
+            let run = st.active_runs.get(id).map(|r| r.value().clone()).ok_or_else(|| format!("run {id} is not active"))?;
+            let name = p.get("signal").and_then(|v| v.as_str()).unwrap_or("TERM").trim_start_matches("SIG").to_uppercase();
+            let sig = match name.as_str() { "INT" => libc::SIGINT, "TERM" => libc::SIGTERM, "KILL" => libc::SIGKILL, "HUP" => libc::SIGHUP, "USR1" => libc::SIGUSR1, "USR2" => libc::SIGUSR2, "STOP" => libc::SIGSTOP, "CONT" => libc::SIGCONT, "QUIT" => libc::SIGQUIT, o => return Err(format!("unsupported signal {o}")) };
+            if matches!(sig, libc::SIGTERM | libc::SIGKILL | libc::SIGINT) { run.stop_requested.store(true, std::sync::atomic::Ordering::SeqCst); }
+            let rc = unsafe { if b(p, "leader_only") { libc::kill(run.pid, sig) } else { libc::killpg(run.pgid, sig) } };
+            if rc != 0 { return Err(format!("kill failed: {}", std::io::Error::last_os_error())); }
+            Ok(json!({ "ok": true, "signal": name, "pid": run.pid, "pgid": run.pgid }))
+        }
+        // Raw control: write to the program's stdin (every run has a piped stdin; add a newline yourself if the program reads lines).
+        "write_stdin" => {
+            let id = s(p, "run_id")?;
+            let run = st.active_runs.get(id).map(|r| r.value().clone()).ok_or_else(|| format!("run {id} is not active"))?;
+            let data = p.get("data").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let mut g = run.stdin.lock().await;
+            let Some(w) = g.as_mut() else { return Err("stdin is closed for this run".into()) };
+            use tokio::io::AsyncWriteExt;
+            w.write_all(data.as_bytes()).await.map_err(|x| x.to_string())?;
+            w.flush().await.map_err(|x| x.to_string())?;
+            if b(p, "close") { *g = None; }
+            Ok(json!({ "ok": true, "bytes": data.len() }))
+        }
+        // Screenshot of the program's window (its solo window if open, else the main window) → PNG path. macOS only.
+        "capture" => {
+            let app_id = opt_s(p, "app_id");
+            let label = app_id.as_deref().map(|id| format!("app-{}", id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect::<String>()));
+            use tauri::Manager;
+            let (win, which) = match label.as_deref().and_then(|l| st.app_handle.get_webview_window(l)) {
+                Some(w) => (w, "solo-window"),
+                None => (st.app_handle.get_webview_window("main").ok_or("no main window")?, "main-window"),
+            };
+            let path = opt_s(p, "path").map(PathBuf::from).unwrap_or_else(|| {
+                let dir = st.home.join("captures"); let _ = std::fs::create_dir_all(&dir);
+                dir.join(format!("{}-{}.png", app_id.as_deref().unwrap_or("homemade"), chrono::Local::now().format("%Y%m%d-%H%M%S")))
+            });
+            #[cfg(target_os = "macos")]
+            {
+                let ns = win.ns_window().map_err(|x| x.to_string())?;
+                let num: isize = unsafe { objc2::msg_send![ns as *mut objc2::runtime::AnyObject, windowNumber] };
+                let out = tokio::process::Command::new("screencapture").args(["-x", "-o", "-l", &num.to_string()]).arg(&path).output().await.map_err(|x| x.to_string())?;
+                if !out.status.success() || !path.is_file() { return Err(format!("screencapture failed: {}", String::from_utf8_lossy(&out.stderr))); }
+            }
+            #[cfg(not(target_os = "macos"))]
+            { let _ = &win; return Err("capture is only implemented on macOS".into()); }
+            #[allow(unreachable_code)]
+            Ok(json!({ "path": path, "window": which, "appId": app_id }))
         }
         "rpc_call" => {
             let app_id = s(p, "app_id")?;
@@ -255,6 +353,28 @@ pub async fn dispatch(st: &Arc<AppState>, method: &str, p: &Value) -> Result<Val
         }
         "explain_run" => j(crate::commands::model::explain_run_inner(st, s(p, "run_id")?).await.map_err(e)?),
         "model_status" => j(st.model.status().await),
+        // Everything an agent needs to know about what its app is doing right now, in one call.
+        "app_activity" => {
+            let id = s(p, "app_id")?;
+            let n = p.get("lines").and_then(|v| v.as_u64()).unwrap_or(40) as usize;
+            let current = st.active_runs.iter().find(|x| x.value().app_id == id).map(|x| x.value().clone());
+            let (history, artifacts) = { let c = st.db.lock().unwrap();
+                (crate::db::queries::list_runs(&c, id, 5).map_err(e)?, crate::db::queries::list_artifacts(&c, id, None, Some("output")).map_err(e)?) };
+            let cur = current.as_ref().map(|r| json!({
+                "runId": r.run_id, "pid": r.pid, "port": *r.port.lock().unwrap(), "ready": r.webapp_ready.load(std::sync::atomic::Ordering::Relaxed),
+                "startedAt": r.started_at, "elapsedMs": crate::types::now_ms() - r.started_at, "mode": r.mode,
+                "peakRamMb": r.peak_ram_mb.load(std::sync::atomic::Ordering::Relaxed),
+                "logTail": crate::supervisor::stdout_parser::tail(r, n).lines().collect::<Vec<_>>(),
+            }));
+            let last = history.iter().find(|r| !matches!(r.status.as_str(), "running" | "queued_vram" | "stopping"));
+            let usage = st.resources.lock().unwrap().per_run.iter().find(|u| u.app_id == id).cloned();
+            let agents: Vec<_> = st.active_ptys.iter().filter(|x| x.value().info.app_id == id).map(|x| x.value().info.clone()).collect();
+            Ok(json!({
+                "appId": id, "state": if current.is_some() { "running" } else { "idle" },
+                "current": cur, "usage": usage, "lastFinished": last, "recentRuns": history, "latestOutputs": artifacts.iter().take(10).collect::<Vec<_>>(),
+                "openAgentSessions": agents,
+            }))
+        }
         "list_agent_sessions" => {
             let id = s(p, "app_id")?.to_string();
             let root = crate::commands::artifacts::app_root(st, &id).map_err(e)?;

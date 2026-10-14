@@ -123,3 +123,9 @@ pub async fn app_process_info(state: St<'_>, app_id: String) -> Result<Option<Pr
         ProcessInfo { run_id: r.run_id.clone(), pid: r.pid, pgid: r.pgid, port: *r.port.lock().unwrap(), ready: r.webapp_ready.load(std::sync::atomic::Ordering::Relaxed) }
     }))
 }
+
+/// Same payload as the control-socket `app_activity` method (agents' one-call catch-up), for the UI and tests.
+#[tauri::command]
+pub async fn app_activity(state: St<'_>, app_id: String) -> Result<serde_json::Value> {
+    crate::control::dispatch(state.inner(), "app_activity", &serde_json::json!({ "app_id": app_id })).await.map_err(crate::error::Error::Msg)
+}

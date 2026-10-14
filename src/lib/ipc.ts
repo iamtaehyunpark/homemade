@@ -60,6 +60,7 @@ export const ipc = {
   confirmQuit: () => invoke<void>("confirm_quit"),
   listListeningPorts: () => invoke<T.ListeningPort[]>("list_listening_ports"),
   killPortOwner: (pid: number) => invoke<void>("kill_port_owner", { pid }),
+  appActivity: (appId: string) => invoke<{ appId: string; state: "running" | "idle"; current: unknown; lastFinished: T.RunRecord | null; recentRuns: T.RunRecord[]; latestOutputs: T.ArtifactRecord[] }>("app_activity", { appId }),
   appProcessInfo: (appId: string) => invoke<T.AppProcessInfo | null>("app_process_info", { appId }),
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
   homemadeHome: () => invoke<string>("homemade_home"),

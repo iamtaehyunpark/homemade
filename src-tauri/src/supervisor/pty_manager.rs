@@ -18,6 +18,10 @@ pub struct ActivePty {
     pub root: PathBuf,
     /// Transcript log at ~/.homemade/sessions/<app_id>/<pty_id>.log
     pub log_path: PathBuf,
+    /// Last keystroke from the UI (ms). Launcher notices are only typed into an agent while the user is not typing.
+    pub last_input: std::sync::atomic::AtomicI64,
+    /// Receives `[homemade]` run notices: every agent, and custom commands (a custom agent) — not a plain interactive shell.
+    pub notices: bool,
 }
 
 /// Spawn an agent/shell in a PTY with cwd = app root and env = state.login_env (+TERM=xterm-256color, COLORTERM=truecolor).
@@ -152,6 +156,8 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
         pid: child.process_id(),
         root: root.clone(),
         log_path: log_path.clone(),
+        last_input: std::sync::atomic::AtomicI64::new(0),
+        notices: agent_type != "custom_shell" || command.as_deref().map(|c| !c.trim().is_empty()).unwrap_or(false),
     });
     state.active_ptys.insert(pty_id.clone(), active);
 
@@ -296,10 +302,39 @@ fn get(state: &AppState, pty_id: &str) -> Result<Arc<ActivePty>> {
 
 pub fn write(state: &AppState, pty_id: &str, data: &str) -> Result<()> {
     let p = get(state, pty_id)?;
+    p.last_input.store(now_ms(), std::sync::atomic::Ordering::Relaxed);
     let mut w = p.writer.lock().unwrap();
     w.write_all(data.as_bytes())?;
     w.flush()?;
     Ok(())
+}
+
+/// Type a launcher notice into an agent session as if the user had sent it (Claude Code / Codex queue it while busy).
+/// Only when the user has not typed for `idle_ms`; otherwise waits up to 30 s for a pause, then gives up (the agent can
+/// still ask `app_activity`). Plain interactive shells never get notices (see `ActivePty.notices`).
+pub fn inject_notice(state: Arc<AppState>, app_id: &str, text: String) {
+    let cfg = crate::storage::config::load(&state.home);
+    if !crate::storage::config::get_bool(&cfg, "agents", "notify_runs", true) { return; }
+    let targets: Vec<Arc<ActivePty>> = state.active_ptys.iter()
+        .filter(|e| e.value().info.app_id == app_id && e.value().notices)
+        .map(|e| e.value().clone()).collect();
+    if targets.is_empty() { return; }
+    let line = format!("{}\r", text.replace(['\r', '\n'], " ⏎ "));
+    for p in targets {
+        let (st, line) = (state.clone(), line.clone());
+        tauri::async_runtime::spawn(async move {
+            let deadline = now_ms() + 30_000;
+            loop {
+                if !st.active_ptys.contains_key(&p.info.pty_id) { return; }
+                let idle = now_ms() - p.last_input.load(std::sync::atomic::Ordering::Relaxed);
+                if idle >= 3_000 { break; }
+                if now_ms() > deadline { return; }
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+            let mut w = p.writer.lock().unwrap();
+            let _ = w.write_all(line.as_bytes()).and_then(|_| w.flush());
+        });
+    }
 }
 
 pub fn resize(state: &AppState, pty_id: &str, cols: u16, rows: u16) -> Result<()> {

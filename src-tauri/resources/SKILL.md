@@ -152,5 +152,18 @@ PATH, `$HOMEMADE_CLI` is the binary, `$HOMEMADE_MCP_COMMAND` is the MCP command,
 So from an agent session you can run and verify the app yourself (`start_run` + `wait_run`, or `homemade run … --wait`)
 instead of asking the user to press Run.
 
+While you work inside a Homemade agent session, the launcher keeps you posted: whenever a run of your app starts, finishes
+or gets a failure diagnosis (including runs the user starts from the window), a message beginning with `[homemade]` is typed
+into your session. Treat it as live ground truth and react (inspect the log, fix, re-run). `app_activity(app_id)` returns the
+same picture on demand: current run with live log tail, last result, latest outputs. (`[agents] notify_runs = false` in
+`~/.homemade/config.toml` turns the messages off.)
+
+The user can also point at things: in select mode they click an element in the launcher and a reference like
+`[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback…" (app kogrammar)]` appears in your input, followed by their
+request. Resolve it with `app_activity` / `get_run_log` / `list_artifacts`; a `web view … at (x,y)` reference points into the
+program's own UI — `capture(app_id)` gives you a screenshot to look at. For deeper inspection of the running program use
+`app_processes` (pid tree), `app_usage` (CPU/RAM/GPU over time), `signal_run`, `write_stdin`, and `get_run_log` with `offset`
+to tail incrementally.
+
 Typical adapt-and-verify loop for an agent: `draft_manifest` → edit → `apply_manifest` → `start_run` + `wait_run` →
 read `log_tail` / `explain_run` → fix the code → `git_checkpoint`.

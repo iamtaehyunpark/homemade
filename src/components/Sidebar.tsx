@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { ipc } from "../lib/ipc";
 import type { AppRecord } from "../lib/types";
 import { useStore, latestRun } from "../state/store";
+import { SelectButton } from "./SelectMode";
 import { useDropTarget, setFallbackDrop } from "../lib/dropRouter";
 import { errMsg, fmtBytes, isActive } from "../lib/format";
 import { dedupeVenv, VENV_BADGE_MIN_BYTES } from "../lib/venv";
@@ -73,6 +74,7 @@ export default function Sidebar() {
         )}
       </div>
       <div className="border-t border-line p-1.5">
+        <div className="mb-1 flex items-center gap-1 px-2"><SelectButton /><span className="text-[11px] text-faint">point at anything → agent</span></div>
         <button data-testid="launch-nav" onClick={() => setView(view === "launch" ? "workbench" : "launch")} title="Program launcher: open any program in its own window"
           className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2 ${view === "launch" ? "bg-panel-2 text-accent" : "text-fg"}`}>
           🚀 Launch

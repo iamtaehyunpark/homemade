@@ -22,6 +22,16 @@ chk "cli git status"        '$B git hello-cli status | grep -q "initialized"'
 chk "cli presets save/list" '$B preset-save hello-cli CliPreset name=P >/dev/null && $B presets hello-cli | grep -q "CliPreset"'
 chk "cli view launch"       '$B view launch'
 chk "cli open hello-cli"    '$B open hello-cli'
+# Monitoring + raw control against a live program: webapp-app serves for a while.
+wrid=$($B run webapp-app 2>/dev/null | head -1)
+sleep 3
+chk "cli ps shows process tree"   '$B ps webapp-app | grep -q "PID"'
+chk "cli top has current usage"   '$B top webapp-app --seconds 5 | grep -q "cpu"'
+chk "cli activity running"        '$B activity webapp-app | grep -q "running"'
+chk "cli log works on a live run"  '$B log $wrid >/dev/null && $B activity webapp-app --json | grep -q logTail'
+chk "cli capture main window png" 'f=$($B capture) && [ -s "$f" ] && file "$f" | grep -q PNG'
+chk "cli record 3s writes jsonl"  'f=$($B record webapp-app --seconds 3 2>/dev/null) && [ -s "$f" ] && grep -q "\"kind\":\"usage\"" "$f"'
+chk "cli signal TERM stops run"   '$B signal $wrid TERM && $B wait $wrid --timeout 20 >/dev/null; $B runs webapp-app --limit 1 | grep -q "killed"'
 # MCP over stdio: initialize, tools/list, tools/call status + start_run/wait_run
 mcp_out=$(printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \

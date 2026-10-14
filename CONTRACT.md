@@ -348,3 +348,17 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
   `-c mcp_servers.homemade.*`; interactive custom shells print `control::hint_line()` first. The shim is now installed for
   every home (test homes included).
 - Agent terminal (`AgentTerminal.tsx`): always dark (`#0b0d10` bg, 16-color palette) regardless of the app theme — ANSI output from agents assumes a black background.
+- Agent awareness: `pty_manager::inject_notice(state, app_id, text)` types `[homemade] Run … STARTED/SUCCEEDED/FAILED` and
+  `Diagnosis …` lines (+ Enter) into every PTY of that app with `notices` (agents and custom commands; not plain shells), only
+  after 3 s without UI keystrokes (`ActivePty.last_input`, waits ≤30 s). Config `[agents] notify_runs` (default true).
+  `app_activity` (control method, MCP tool, `homemade activity`, Tauri command) = one-call catch-up. The Claude system prompt
+  explains both.
+- Program monitoring/control (control methods + MCP tools + CLI): `app_usage` (1 Hz history from `AppState.usage_history`,
+  300 samples), `app_processes` (sysinfo over the run's pgid), `signal_run`, `write_stdin` (every run's stdin is piped),
+  `get_run_log {offset}` → `{lines,next,total,active}` for incremental tailing, `capture` (macOS `screencapture -l <NSWindow
+  windowNumber>` of the solo window or main; PNG under `<home>/captures`). CLI: `top`, `ps`, `signal`, `stdin`, `capture`,
+  `record` (client-side JSONL of usage + new log lines), `activity`; `log --follow` uses offsets.
+- Select mode (`src/lib/selectMode.ts`, `components/SelectMode.tsx`, store `selectMode`, button `select-mode` in the sidebar
+  footer + agent toolbar, ⌘⇧C, Esc): overlay with a pointer shield (so iframes don't swallow events), hover label, click →
+  `describe()` builds `[ui: App › area › tab › testid "text" (app id)]` (iframes: web view URL + click offset) and `mention()`
+  types it (no Enter) into the app's newest PTY via `pty_write`, else clipboard. Test: "select mode" in run.js.

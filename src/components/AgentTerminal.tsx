@@ -10,6 +10,7 @@ import { Btn } from "./ui";
 import { terminals } from "../lib/registry";
 import { useStore } from "../state/store";
 import { cssVar, useTheme } from "../lib/theme";
+import { SelectButton } from "./SelectMode";
 
 /** The terminal is always dark, whatever the app theme: agents print ANSI colors tuned for black backgrounds, and a
  * light terminal made bright-white / bright-yellow text unreadable. Classic 16-color palette with high contrast. */
@@ -143,6 +144,7 @@ export default function AgentTerminal({ appId }: { appId: string }) {
         <Btn data-testid="terminal-new" onClick={() => start(false)}>{isShell ? "New shell" : "New session"}</Btn>
         {!isShell && <Btn disabled={!sessionId} onClick={() => start(true)}>Resume</Btn>}
         {exited && <Btn variant="primary" onClick={() => start(!!sessionId)}>Restart</Btn>}
+        <SelectButton />
       </div>
       <div className="min-h-0 flex-1 p-1.5" style={{ background: "#0b0d10" }}><div ref={host} className="h-full w-full" /></div>
     </div>

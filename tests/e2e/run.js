@@ -488,6 +488,57 @@ await t("pop-out of an already-serving webapp catches up on port + readiness", a
   await waitRun(r.id, ["killed", "success", "failed"], 20000);
 });
 
+await t("agents are told about runs: [homemade] notices typed into the app's agent session", async () => {
+  const a = apps["hello-cli"];
+  let buf = "";
+  const un = await H.on("pty://data", (p) => { buf += p.data; });
+  // A custom command stands in for an agent: it echoes every line it receives.
+  const info = await H.ipc.ptySpawn(a.id, "custom_shell", { command: "while IFS= read -r l; do echo \"GOT:$l\"; done", cols: 160, rows: 24 });
+  await sleep(500);
+  const run = await H.ipc.startRun(a.id, { name: "Notice", count: 1 });
+  await H.waitFor(() => /GOT:\[homemade\] Run [0-9a-f]{8} of hello-cli STARTED/.test(buf), 15000);
+  await waitRun(run.id, ["success", "failed", "killed"], 30000);
+  await H.waitFor(() => /GOT:\[homemade\] Run [0-9a-f]{8} of hello-cli SUCCEEDED/.test(buf), 15000);
+  ok(/greeting\.txt/.test(buf), "success notice should name the output: " + buf.slice(-300));
+  // Notices wait for the user to stop typing: keystrokes within 3 s defer the notice.
+  await H.ipc.ptyWrite(info.ptyId, "x");
+  const before = buf.length;
+  const run2 = await H.ipc.startRun(a.id, { name: "Deferred", count: 1 });
+  await sleep(1500);
+  ok(!/STARTED/.test(buf.slice(before)), "notice must not interrupt typing");
+  await H.waitFor(() => /STARTED/.test(buf.slice(before)), 15000);
+  await waitRun(run2.id, ["success", "failed", "killed"], 30000);
+  un();
+  await H.ipc.ptyKill(info.ptyId).catch(() => {});
+  // app_activity over the control socket summarizes the same state.
+  const act = await H.ipc.appActivity(a.id);
+  ok(act.state === "idle" && act.lastFinished && act.lastFinished.status === "success", "app_activity: " + JSON.stringify(act).slice(0, 200));
+});
+
+await t("select mode: picking an element mentions it in the app's agent session (no Enter)", async () => {
+  const a = apps["hello-cli"];
+  await H.openApp(a.id);
+  let buf = "";
+  const un = await H.on("pty://data", (p) => { buf += p.data; });
+  const info = await H.ipc.ptySpawn(a.id, "custom_shell", { command: "cat", cols: 160, rows: 24 });
+  await sleep(500);
+  H.click('[data-testid="select-mode"]');
+  await H.waitFor(() => q('[data-testid="select-overlay"]'), 5000);
+  const target = q(`[data-app-panel="${a.id}"] [data-testid="run-button"]`);
+  const r = target.getBoundingClientRect();
+  const ev = (type) => new MouseEvent(type, { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
+  document.dispatchEvent(ev("mousemove"));
+  await sleep(100);
+  ok(q('[data-select-overlay]').textContent.includes("run-button"), "hover label should name the element: " + q('[data-select-overlay]').textContent);
+  target.dispatchEvent(ev("click"));
+  await H.waitFor(() => !q('[data-testid="select-overlay"]'), 3000);
+  await H.waitFor(() => /\[ui: Hello CLI › run-button "▶ Run" \(app hello-cli\)\]/.test(buf), 5000);
+  ok(!/\r|\n/.test(buf.slice(buf.indexOf("[ui:"))), "mention must not press Enter: " + JSON.stringify(buf.slice(-120)));
+  ok(!Object.values(H.store.getState().runs).some((r) => r.appId === a.id && r.status === "running"), "the pick click must not trigger the button");
+  un();
+  await H.ipc.ptyKill(info.ptyId).catch(() => {});
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});

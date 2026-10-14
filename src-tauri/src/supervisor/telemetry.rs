@@ -76,7 +76,7 @@ pub fn start(state: Arc<AppState>) {
             let snap = {
                 let mut res = state.resources.lock().unwrap();
                 let queue = queue.unwrap_or_else(|| res.queue.clone());
-                *res = ResourceSnapshot {
+                *res = ResourceSnapshot { t: None,
                     cpu_pct: sys.global_cpu_usage(),
                     ram_used_mb: sys.used_memory() / MIB,
                     ram_total_mb: sys.total_memory() / MIB,
@@ -84,6 +84,13 @@ pub fn start(state: Arc<AppState>) {
                 };
                 res.clone()
             };
+            {
+                let mut h = state.usage_history.lock().unwrap();
+                let mut stamped = snap.clone();
+                stamped.t = Some(crate::types::now_ms());
+                h.push_back(stamped);
+                while h.len() > 300 { h.pop_front(); }
+            }
             state.emit("resources://tick", snap);
             super::scheduler::on_run_finished(state.clone()).await;
         }

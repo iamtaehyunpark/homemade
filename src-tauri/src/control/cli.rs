@@ -19,8 +19,18 @@ homemade — drive the Homemade launcher from a shell or an agent
   homemade wait <run-id> [--timeout S]    block until the run ends, print its record, exit 0 on success
   homemade runs <id> [--limit N]          run history
   homemade active                         runs in progress
+  homemade activity <id>                  what the app is doing now: current run, live log tail, last result, outputs
   homemade log <run-id> [--follow]        run log (live ring buffer while active, stored tail after)
   homemade explain <run-id>               local-model explanation of a failed run
+  homemade top <id> [--watch] [--seconds N]
+                                          the program's CPU / RAM / GPU: now, peak, and the last N s of samples
+  homemade ps <id>                        process tree of the running program (pid, pgid, port, per-process cpu/rss)
+  homemade signal <run-id> <SIG> [--leader]
+                                          send INT|TERM|KILL|HUP|USR1|USR2|STOP|CONT|QUIT to the process group
+  homemade stdin <run-id> <text> [--close] write to the program's stdin (a literal backslash-n becomes a newline)
+  homemade capture [id] [--out FILE]      screenshot of the program's window (or the main window) → PNG path
+  homemade record <id> [--seconds N] [--out FILE]
+                                          record usage samples + new log lines as JSON lines for N s (default 30)
   homemade cli <id> [k=v]...              the shell command a run would execute
   homemade rpc <id> <method> [json]       call a method on a warm rpc_worker
   homemade artifacts <id> [run-id]        output files
@@ -133,14 +143,94 @@ fn go(cmd: &str, rest: &[String], json_out: bool) -> Result<i32, String> {
             for r in a { println!("{}  {}  {}  {}", r["id"].as_str().unwrap_or(""), r["appId"].as_str().unwrap_or(""), r["status"].as_str().unwrap_or(""), r["cliCommand"].as_str().unwrap_or("")); }
             Ok(0)
         }
+        "activity" => {
+            let v = client::call("app_activity", &json!({ "app_id": arg(rest, 0, "app id")?, "lines": flag_val(rest, "--lines").and_then(|s| s.parse::<u64>().ok()).unwrap_or(40) }))?;
+            if json_out { print(&v); return Ok(0); }
+            println!("{}: {}", v["appId"].as_str().unwrap_or(""), v["state"].as_str().unwrap_or(""));
+            if let Some(c) = v["current"].as_object() {
+                println!("current run {} pid {} elapsed {:.0}s{}", c["runId"].as_str().unwrap_or(""), c["pid"], c["elapsedMs"].as_f64().unwrap_or(0.0) / 1000.0, c["port"].as_u64().map(|p| format!(" port {p}{}", if c["ready"].as_bool().unwrap_or(false) { " (ready)" } else { "" })).unwrap_or_default());
+                for l in c["logTail"].as_array().cloned().unwrap_or_default() { println!("  {}", l.as_str().unwrap_or("")); }
+            }
+            if let Some(l) = v["lastFinished"].as_object() { println!("last finished: {} {} exit {} at {}", l["id"].as_str().unwrap_or(""), l["status"].as_str().unwrap_or(""), l["exitCode"], ts(l["finishedAt"].as_i64())); }
+            for a in v["latestOutputs"].as_array().cloned().unwrap_or_default().iter().take(5) { println!("  output: {}", a["filePath"].as_str().unwrap_or("")); }
+            Ok(0)
+        }
+        "top" => {
+            let id = arg(rest, 0, "app id")?;
+            let secs = flag_val(rest, "--seconds").and_then(|s| s.parse::<u64>().ok()).unwrap_or(60);
+            loop {
+                let v = client::call("app_usage", &json!({ "app_id": id, "seconds": secs }))?;
+                if json_out { print(&v); } else {
+                    match v["current"].as_object() {
+                        Some(c) => println!("{id}: cpu {:.1}%  ram {} MB  gpu {} MB  (peak ram {} MB){}", c["cpuPct"].as_f64().unwrap_or(0.0), c["ramMb"], c["vramMb"], v["peak"]["ramMb"], if flag(rest, "--watch") { "" } else { "" }),
+                        None => println!("{id}: not running"),
+                    }
+                    let samples = v["samples"].as_array().cloned().unwrap_or_default();
+                    if !samples.is_empty() && !flag(rest, "--watch") {
+                        println!("{:<24} {:>7} {:>8} {:>8}", "TIME", "CPU%", "RAM MB", "GPU MB");
+                        for s in &samples { println!("{:<24} {:>7.1} {:>8} {:>8}", ts(s["t"].as_i64()), s["cpuPct"].as_f64().unwrap_or(0.0), s["ramMb"], s["vramMb"]); }
+                    }
+                }
+                if !flag(rest, "--watch") { return Ok(0); }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+        "ps" => {
+            let v = client::call("app_processes", &json!({ "app_id": arg(rest, 0, "app id")? }))?;
+            if json_out { print(&v); return Ok(0); }
+            if v["runId"].is_null() { println!("not running"); return Ok(0); }
+            println!("run {}  pid {}  pgid {}  port {}", v["runId"].as_str().unwrap_or(""), v["pid"], v["pgid"], v["port"].as_u64().map(|p| p.to_string()).unwrap_or_else(|| "-".into()));
+            println!("{:<8} {:<8} {:>6} {:>8} {}", "PID", "PPID", "CPU%", "RSS MB", "COMMAND");
+            for p in v["processes"].as_array().cloned().unwrap_or_default() { println!("{:<8} {:<8} {:>6.1} {:>8} {}", p["pid"], p["parentPid"].as_u64().map(|x| x.to_string()).unwrap_or_default(), p["cpuPct"].as_f64().unwrap_or(0.0), p["rssMb"], p["cmd"].as_str().filter(|c| !c.is_empty()).unwrap_or(p["name"].as_str().unwrap_or(""))); }
+            Ok(0)
+        }
+        "signal" => { let v = client::call("signal_run", &json!({ "run_id": arg(rest, 0, "run id")?, "signal": arg(rest, 1, "signal")?, "leader_only": flag(rest, "--leader") }))?; println!("sent {} to pgid {}", v["signal"].as_str().unwrap_or(""), v["pgid"]); Ok(0) }
+        "stdin" => {
+            let text = arg(rest, 1, "text")?.replace("\\n", "\n").replace("\\t", "\t");
+            client::call("write_stdin", &json!({ "run_id": arg(rest, 0, "run id")?, "data": text, "close": flag(rest, "--close") }))?; Ok(0)
+        }
+        "capture" => {
+            let id = rest.first().filter(|a| !a.starts_with("--")).cloned();
+            let v = client::call("capture", &json!({ "app_id": id, "path": flag_val(rest, "--out") }))?;
+            if json_out { print(&v); } else { println!("{}", v["path"].as_str().unwrap_or("")); }
+            Ok(0)
+        }
+        "record" => {
+            let id = arg(rest, 0, "app id")?;
+            let secs = flag_val(rest, "--seconds").and_then(|s| s.parse::<u64>().ok()).unwrap_or(30);
+            let out_path = flag_val(rest, "--out").unwrap_or_else(|| format!("{}/captures/{id}-{}.jsonl", crate::storage::config::homemade_home().display(), chrono::Local::now().format("%Y%m%d-%H%M%S")));
+            if let Some(d) = std::path::Path::new(&out_path).parent() { let _ = std::fs::create_dir_all(d); }
+            let mut f = std::fs::File::create(&out_path).map_err(|e| format!("{out_path}: {e}"))?;
+            use std::io::Write as _;
+            let end = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+            let (mut run_id, mut offset) = (None::<String>, 0u64);
+            let mut n = 0usize;
+            eprintln!("recording {id} for {secs}s → {out_path}");
+            while std::time::Instant::now() < end {
+                let u = client::call("app_usage", &json!({ "app_id": id, "seconds": 1 }))?;
+                let t = crate::types::now_ms();
+                writeln!(f, "{}", json!({ "t": t, "kind": "usage", "current": u["current"], "peak": u["peak"] })).ok();
+                let cur = client::call("app_process_info", &json!({ "app_id": id }))?;
+                let rid = cur["runId"].as_str().map(String::from);
+                if rid != run_id { run_id = rid; offset = 0; if let Some(r) = &run_id { writeln!(f, "{}", json!({ "t": t, "kind": "run", "runId": r, "pid": cur["pid"], "port": cur["port"] })).ok(); } }
+                if let Some(r) = &run_id {
+                    let l = client::call("get_run_log", &json!({ "run_id": r, "offset": offset }))?;
+                    for line in l["lines"].as_array().cloned().unwrap_or_default() { writeln!(f, "{}", json!({ "t": t, "kind": "log", "runId": r, "line": line })).ok(); }
+                    offset = l["next"].as_u64().unwrap_or(offset);
+                }
+                n += 1;
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            if json_out { print(&json!({ "path": out_path, "samples": n })); } else { println!("{out_path}"); }
+            Ok(0)
+        }
         "log" => {
             let id = arg(rest, 0, "run id")?;
-            let mut shown = 0usize;
+            let mut offset = 0u64;
             loop {
-                let v = client::call("get_run_log", &json!({ "run_id": id }))?;
-                let lines = v.as_array().cloned().unwrap_or_default();
-                for l in &lines[shown.min(lines.len())..] { println!("{}", l.as_str().unwrap_or("")); }
-                shown = lines.len();
+                let v = client::call("get_run_log", &json!({ "run_id": id, "offset": offset }))?;
+                for l in v["lines"].as_array().cloned().unwrap_or_default() { println!("{}", l.as_str().unwrap_or("")); }
+                offset = v["next"].as_u64().unwrap_or(offset);
                 if !flag(rest, "--follow") { return Ok(0); }
                 let r = client::call("get_run", &json!({ "run_id": id }))?;
                 if !matches!(r["status"].as_str(), Some("running") | Some("queued_vram") | Some("stopping")) { return Ok(if r["status"] == "success" { 0 } else { 2 }); }

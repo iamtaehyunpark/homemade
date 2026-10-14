@@ -33,6 +33,10 @@ Runs one registered app end to end and prints the status, log tail and artifacts
 
 Any app can run as if it were a program of its own: open it and press the **⧉ Window** button in its header, drag its tab out of the dock area, or use the **Launch** page in the sidebar, a grid of program tiles that opens any program in its own window with one click. Put an `icon.png` in the project root to use it as the tile. That window contains only the program (its web UI, custom UI, or input form with a Run button), with no sidebar, header, or Underbar. Web apps start their server as soon as the window opens. A program that is open in its own window disappears from the Launch grid until that window closes. Closing the window exits the program: its run is stopped cleanly first. Press **⌘⇧D** in the window to bring the app back into the main window as a tab instead. Logs, runs and git stay available in the main window. To make an app always open this way, set `default_layout = "window"` under `[ui]` in its `homemade.toml`.
 
+## Select mode: point at anything, tell the agent
+
+Press the ⌖ Select button (sidebar footer or the agent terminal toolbar, or ⌘⇧C), then click any element in the launcher: a run row, a log line, an output card, a form field, a tile, or a spot inside a program's web UI. Homemade types a reference like `[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback …" (app kogrammar)]` into the app's open agent session, without pressing Enter, so you can continue with what you want done about it. With no agent session open, the reference goes to the clipboard. Esc leaves select mode.
+
 ## CLI and MCP: driving Homemade from a shell or an agent
 
 The same binary is a CLI and an MCP server, and both control the running app through a local socket, so an agent or a script can do everything the window can. Add `~/.homemade/bin` to your PATH (the app writes a `homemade` shim there on launch), then:
@@ -43,10 +47,15 @@ homemade import ~/code/thing            # register a folder
 homemade run thing input=a.mp4 --wait   # run and block; exit 0 on success
 homemade log <run-id> --follow
 homemade open thing --window            # open as a standalone program window
+homemade activity thing                 # what it is doing now: run, live log tail, last result, outputs
+homemade top thing --watch              # live CPU / RAM / GPU of the program (history with --seconds)
+homemade ps thing                       # its process tree with pid, pgid, port
+homemade signal <run-id> USR1           # any POSIX signal; stdin <run-id> "text" writes to its stdin
+homemade capture thing                  # PNG of the program's window; record thing --seconds 30 → JSONL of usage + log
 homemade help                           # the rest; --json for scripts
 ```
 
-Anything Homemade starts already knows this: program runs, agent terminals and shells get `homemade` on PATH and `HOMEMADE_MCP_COMMAND` in their environment, and Claude Code or Codex sessions opened with Edit with Agent have the `homemade` MCP server connected automatically. For agents you start yourself, register the MCP server once with `claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp`. It exposes the same operations as tools (import, run, wait, stop, logs, artifacts, presets, git checkpoint, open windows, ports, resources). When the GUI is not running, the read-only tools still answer from the database and `launch_gui` starts it.
+Anything Homemade starts already knows this: program runs, agent terminals and shells get `homemade` on PATH and `HOMEMADE_MCP_COMMAND` in their environment, and Claude Code or Codex sessions opened with Edit with Agent have the `homemade` MCP server connected automatically. Agents started from Homemade also stay aware of the program they work on: when a run of that app starts, finishes, or gets a failure diagnosis, Homemade types a `[homemade] …` status line into the agent session (only while you are not typing), and the `app_activity` tool or `homemade activity <id>` returns the current run, live log tail, last result and outputs on demand. Set `notify_runs = false` under `[agents]` in `~/.homemade/config.toml` to turn the messages off. For agents you start yourself, register the MCP server once with `claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp`. It exposes the same operations as tools (import, run, wait, stop, logs, artifacts, presets, git checkpoint, open windows, ports, resources). When the GUI is not running, the read-only tools still answer from the database and `launch_gui` starts it.
 
 ## Local model (macOS 26+)
 
