@@ -110,7 +110,7 @@ export default function AppSandbox({ app }: { app: AppRecord }) {
   return (
     <div ref={dropRef} className="relative h-full w-full bg-white">
       <iframe key={reloadKey} ref={frame} data-testid="app-sandbox" data-bridge={bridgeReady ? "ready" : "pending"} title={app.name} src={appUiUrl(app.id)} sandbox="allow-scripts allow-forms allow-modals" className="h-full w-full border-0" />
-      {running && <div className="pointer-events-none absolute right-2 top-2 h-2 w-2 animate-pulse rounded-full bg-emerald-400" />}
+      {running && <div className="pointer-events-none absolute right-2 top-2 h-2 w-2 animate-pulse rounded-full bg-ok" />}
     </div>
   );
 }

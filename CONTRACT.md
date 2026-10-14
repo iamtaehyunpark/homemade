@@ -234,3 +234,84 @@ pub async fn draft_manifest(state: &AppState, root: &Path, res_dir: &Path) -> Re
 [model]
 provider = "apple"   # "apple" (default on macOS 26+) | "off"
 ```
+
+## UI/UX pass 2 (2026-10-14) — the Underbar
+
+Goal: every per-program surface lives in ONE bottom card per app panel ("Underbar") with tabs, instead of three stacked strips. Clearer
+header, consistent empty states, everything "raw program" related reachable from the Underbar.
+
+### AppPanel layout (Agent B — frontend)
+```
+┌ header: [name] [mode] [GPU] [RAM≤] ……… [Presets ▾] [▶ Run / ■ Stop]  [⋯ more: Copy as CLI · Draft manifest · Edit with Agent · Remove] ┐
+│ queue banner (unchanged)                                                                                                             │
+│ main: AutoForm | custom UI sandbox | webapp frame                                                                                    │
+├ Underbar card (resizable by dragging its top edge; height persisted in localStorage per app; collapsible to the tab strip) ──────────┤
+│ tabs: ● Logs | Outputs (n) | Runs (n) | Git ● | Program | Manifest        ……  [run status badge] [⤒ collapse]                       │
+│ active tab body                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+- Keep EVERY existing `data-testid` (run-button, stop-button, copy-cli, preset-save/select/item, edit-with-agent, remove-app, git-init,
+  git-checkpoint, git-log, git-revert-<sha>, output-shelf, shelf-item, clean-scratch, log-console, log-line, progress-bar, queue-banner,
+  queue-run-anyway, run-history, run-history-item, app-sandbox, webapp-frame, ram-limit, draft-manifest, run-health, explain-run, …).
+  Items moved into the `⋯` menu keep their testids on the menu items; the menu must open on click of `data-testid="app-more"`.
+- **Inactive tabs stay mounted and are hidden with the `hidden` attribute/class** (never unmounted) so log scroll/xterm state survives and the
+  live E2E suite can keep clicking elements in non-active tabs. The Underbar root is `data-testid="underbar"` with `data-tab="<active>"`;
+  tab buttons are `data-testid="underbar-tab-<logs|outputs|runs|git|program|manifest>"`.
+- Auto-switching: starting a run (or a `run://status` → running for the latest run) switches to **Logs**; a terminal status with new
+  artifacts switches to **Outputs** only if the user has not clicked a tab during that run. Manual tab choice is remembered per app (localStorage).
+- Tab badges: Logs shows a live dot while the viewed run is active; Outputs shows the artifact count; Runs shows the count; Git shows an
+  amber dot when the working tree is dirty and a gray "not tracked" state when uninitialized.
+
+### Tabs
+1. **Logs** — existing LogConsole (health banner + Explain inside it), plus a one-line toolbar: viewed run (latest or selected from Runs),
+   `Copy log`, `Clear view`, filter box (substring), stderr-only toggle. Progress bar stays at the top of the log.
+2. **Outputs** — existing OutputShelf, grid of cards (thumbnail for images/video, icon otherwise), `Reveal`, drag-out, `Clean scratch`, run selector.
+3. **Runs** — table: status, started (rel time), duration, exit code, peak RAM, command (mono, truncated, title=full). Row click selects the run
+   for Logs/Outputs (keeps `run-history-item` testid + `data-run-id`/`data-status`). Row actions: `Re-run` (same inputs → `startRun(appId, JSON.parse(inputsJson))`),
+   `Copy CLI`, and `Stop` when active.
+4. **Git** — a commit graph: vertical lane with dots and connecting lines (SVG or CSS), one row per commit: short sha (mono), message, rel time,
+   `HEAD` pill, refs pills (branch names from `refs`), Homemade checkpoint markers (messages starting with `homemade:` get a small tag:
+   "checkpoint" / "before agent" / "after agent" / "pre-revert"), and `Revert to` (`git-revert-<sha>`, not on HEAD; confirm modal as today).
+   Above the graph: working-tree panel: dirty file list (`dirtyFiles`, each with its status letter), `Checkpoint` (`git-checkpoint`, disabled when
+   clean) with message prompt, and `Track with Git` (`git-init`) when not initialized. Keep `git-log` as the testid of the graph container.
+   Auto-checkpoint note: "Agent sessions are checkpointed automatically" with a link to Settings when `[git] auto_checkpoint` is false (read via `homemadeHome`+`readTextFile`? no — just always show the sentence; config UI is out of scope).
+5. **Program** — the raw-program facts, read-only with copy buttons: resolved command preview (`buildCliCommand` with current form values,
+   refreshed on change, `data-testid="program-command"`), root dir (`Reveal in Finder` via `revealInFinder`), cwd, mode, env manager, Python/venv
+   (unmanaged venv bytes + `Deduplicate` button reusing the Sidebar logic; testid `venv-dedupe` must remain on the Sidebar badge too),
+   resources (requires_gpu, vram estimate, max_ram advisory), secrets names required (from manifest.environment.secrets, with a ✓/✗ whether each
+   exists in `listSecretNames`), shared store refs for this app (`storageRefs(appId)` — new backend command, see below), and while running:
+   pid/pgid, announced port (from store.ports), CPU/RAM/GPU from `resources.perRun`.
+6. **Manifest** — `homemade.toml` editor: textarea (mono) loaded via `readTextFile(rootDir + "/homemade.toml")`, `Save` → `saveManifest(appId, text)`
+   (existing command: validates + writes + reloads), `Reload from disk`, validation error line, `Draft with local model` button that opens the existing
+   DraftManifestModal (`draft-manifest` testid stays in the header `⋯` menu too). Show "inferred — not written" note when the app has no file on disk.
+
+### Other UX (Agent B)
+- Sidebar: group apps under **Running** (active run) and **Apps**; each row shows mode badge + a tiny status dot; hovering shows root dir; the
+  import dropdown keeps `import-app` and `import-draft`. Empty state copy unchanged.
+- Header `⋯` menu (`app-more`): Copy as CLI (`copy-cli`), Draft manifest (`draft-manifest`), Edit with Agent (`edit-with-agent`), Reveal in Finder, Remove (`remove-app`).
+  `Edit with Agent` ALSO stays as a visible header button (it is a primary action) — the menu entry is the same handler.
+- Consistent empty states ("No runs yet — press Run", "No outputs for this run", "Not tracked with Git", …) and tooltips on every icon-only button.
+- Keyboard: ⌘1…⌘6 switch Underbar tabs when the panel is focused; ⌘↵ run/stop (exists).
+
+### Backend additions (lead)
+- `GitLogEntry` gains `parents: string[]`, `refs: string[]` (decorations, e.g. ["HEAD -> main", "main"] split into ["HEAD", "main"]), `author: string`.
+  `GitStatus` gains `dirtyFiles: {path, status}[]` (from `git status --porcelain`, status = XY code). `git_status` returns up to 100 log entries.
+- New command `storage_refs(app_id)` → `StorageRef[]` = `[{assetHash, assetPath, appId, sizeBytes}]` from the `storage_refs` table for that app.
+- New command `app_process_info(app_id)` → `{ runId, pid, pgid, port } | null` for the active run.
+
+### Theme: light by default (Agent B)
+The user wants a bright UI. Replace the hard-coded dark palette with semantic tokens and make **light the default**, with a Settings toggle
+(`data-testid="theme-select"`: light / dark / system, persisted in localStorage `homemade.theme`, applied as `data-theme` on `<html>`).
+- `src/index.css`: define tokens on `:root` (light) and under `:root[data-theme="dark"]` / `@media (prefers-color-scheme: dark)` guarded by
+  `:root:not([data-theme="light"])` (dark). Tokens: `--color-bg`, `--color-panel`, `--color-panel-2` (raised), `--color-line`, `--color-fg`,
+  `--color-fg-muted`, `--color-fg-faint`, `--color-accent`, `--color-accent-soft`, `--color-ok`, `--color-warn`, `--color-danger`, plus their
+  Tailwind `@theme` aliases (`bg-bg`, `bg-panel`, `bg-panel-2`, `border-line`, `text-fg`, `text-muted`, `text-faint`, `text-accent`, …).
+  Light palette: bg #f6f7f9, panel #ffffff, panel-2 #eef0f4, line #dfe3ea, fg #1b1f27, muted #5b6472, faint #8a93a3, accent #2f6fed, ok #1a9e5c,
+  warn #b7791f, danger #d43d3d. Dark palette: the current colors (bg #0f1115, panel #171a21, line #262a33, fg #e6e6e6, muted #9aa3b2, faint #6b7280, accent #6ea8fe).
+- Sweep every component: `text-gray-*` → `text-fg|text-muted|text-faint`, `bg-white/5|10` → `bg-panel-2` or `hover:bg-panel-2`, `bg-black/60`
+  (modal backdrop) → `bg-black/30` light / keep dark via token `--color-backdrop`, `.field` and dockview variables (`.dockview-theme-light` on light,
+  `.dockview-theme-dark` on dark — switch the class on the Workbench root from the theme), xterm theme object (background/foreground/cursor from the
+  tokens, re-applied when the theme changes), WebappFrame iframe `bg-white` stays. Status colors (emerald/amber/red) may stay as Tailwind colors but
+  use the darker shade on light (e.g. `text-emerald-700` light / `text-emerald-400` dark via `dark:` is NOT available — use token classes `text-ok|warn|danger`).
+- `tauri.conf.json` window `backgroundColor` → "#f6f7f9" so the window does not flash dark; `index.html` sets `data-theme` from localStorage before
+  React mounts (inline script) to avoid a flash.

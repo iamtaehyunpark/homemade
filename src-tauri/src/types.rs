@@ -124,7 +124,14 @@ pub struct GitStatus {
     pub dirty: bool,
     pub head: Option<String>,
     pub log: Vec<GitLogEntry>,
+    /// `git status --porcelain` entries: XY status code + path.
+    #[serde(default)]
+    pub dirty_files: Vec<GitDirtyFile>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDirtyFile { pub path: String, pub status: String }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -132,6 +139,13 @@ pub struct GitLogEntry {
     pub sha: String,
     pub message: String,
     pub timestamp: i64,
+    #[serde(default)]
+    pub parents: Vec<String>,
+    /// Decorations split into names: "HEAD", branch and tag names.
+    #[serde(default)]
+    pub refs: Vec<String>,
+    #[serde(default)]
+    pub author: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,18 +1,16 @@
-// One app's workspace: header (run/stop, CLI copy, presets, agent toggle), git bar, form or custom UI, logs, outputs.
-import { useEffect, useMemo, useState } from "react";
+// One app's workspace: header (run/stop, presets, Edit with Agent, ⋯ menu), queue banner, form / custom UI / webapp, Underbar.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DockviewApi, DockviewPanelApi } from "dockview";
 import { ipc } from "../lib/ipc";
-import type { PresetRecord, RunRecord } from "../lib/types";
+import type { PresetRecord } from "../lib/types";
 import { useStore, latestRun } from "../state/store";
-import { errMsg, fmtMb, isActive, relTime } from "../lib/format";
+import { errMsg, fmtMb, isActive } from "../lib/format";
 import { defaultValues, validate } from "../lib/form";
 import { Badge, Btn, Dropdown, MenuItem, Modal, PromptModal } from "./ui";
 import AutoForm from "./AutoForm";
 import AppSandbox from "./AppSandbox";
 import WebappFrame from "./WebappFrame";
-import GitBar from "./GitBar";
-import LogConsole from "./LogConsole";
-import OutputShelf from "./OutputShelf";
+import Underbar from "./Underbar";
 
 const isMac = navigator.platform.toLowerCase().includes("mac");
 const agentId = (appId: string) => `agent:${appId}`;
@@ -53,7 +51,7 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
   }, [appId]);
 
   const errors = useMemo(() => (manifest ? validate(manifest, values) : {}), [manifest, values]);
-  if (!app || !manifest) return <div className="p-4 text-gray-500">Loading app…</div>;
+  if (!app || !manifest) return <div className="p-4 text-muted">Loading app…</div>;
 
   const active = isActive(run?.status);
   const start = async () => {
@@ -79,7 +77,7 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
   };
 
   return (
-    <div data-app-panel={appId} className="flex h-full flex-col bg-panel" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); active ? stop() : start(); } }}>
+    <div data-app-panel={appId} tabIndex={-1} className="flex h-full flex-col bg-panel outline-none" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); active ? stop() : start(); } }}>
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
         <h1 className="mr-1 truncate text-[14px] font-semibold" title={app.rootDir}>{app.name}</h1>
         <Badge color="accent">{app.executionMode.replace("_", " ")}</Badge>
@@ -91,31 +89,33 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
         <Dropdown testid="preset-select" label="Presets" align="right">
           {(close) => (<>
             {presets.map((p) => (
-              <div key={p.id} className="flex items-center hover:bg-white/5">
+              <div key={p.id} className="flex items-center hover:bg-panel-2">
                 <button data-testid="preset-item" className="flex-1 truncate px-3 py-1 text-left" onClick={() => { close(); loadPreset(p); }}>{p.name}</button>
-                <button className="px-2 text-gray-600 hover:text-red-400" title="Delete preset" onClick={() => ipc.deletePreset(p.id).then(loadPresets)}>✕</button>
+                <button className="px-2 text-faint hover:text-danger" title="Delete preset" onClick={() => ipc.deletePreset(p.id).then(loadPresets)}>✕</button>
               </div>
             ))}
-            {!presets.length && <div className="px-3 py-1 text-gray-500">No presets yet</div>}
+            {!presets.length && <div className="px-3 py-1 text-muted">No presets yet</div>}
             <div className="my-1 border-t border-line" />
             <MenuItem testid="preset-save" onClick={() => { close(); setSavingPreset(true); }}>Save preset…</MenuItem>
           </>)}
         </Dropdown>
-        <Btn data-testid="draft-manifest" onClick={() => useStore.getState().setDraftPath(app.rootDir)} title="Draft a homemade.toml with the local model">✨ Draft manifest</Btn>
-        <Btn data-testid="copy-cli" onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</Btn>
-        {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""}>Edit with Agent</Btn>}
-        <Btn data-testid="remove-app" variant="ghost" title="Remove app from Homemade" onClick={() => setRemoving(true)}>Remove</Btn>
+        {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""} title="Open a coding agent in this app's folder">Edit with Agent</Btn>}
         {active
           ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
           : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting} title="⌘↵">▶ Run</Btn>}
+        <MoreMenu>
+          {(close) => (<>
+            <MenuEntry testid="copy-cli" close={close} onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</MenuEntry>
+            <MenuEntry testid="draft-manifest" close={close} onClick={() => useStore.getState().setDraftPath(app.rootDir)} title="Draft a homemade.toml with the local model">✨ Draft manifest</MenuEntry>
+            {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={toggleAgent}>{agentOpen ? "Close agent" : "Edit with Agent"}</MenuEntry>}
+            <MenuEntry testid="reveal-app" close={close} onClick={() => ipc.revealInFinder(app.rootDir).catch((e) => notify(errMsg(e)))}>Reveal in Finder</MenuEntry>
+            <div className="my-1 border-t border-line" />
+            <MenuEntry testid="remove-app" close={close} danger onClick={() => setRemoving(true)} title="Remove app from Homemade">Remove…</MenuEntry>
+          </>)}
+        </MoreMenu>
       </header>
-      <div className="flex items-center gap-3 border-b border-line px-3 py-1">
-        <GitBar appId={appId} refreshKey={app.manifestHash} />
-        <div className="flex-1" />
-        {run && <RunStatus status={run.status} exitCode={run.exitCode} />}
-      </div>
       {run?.status === "queued_vram" && (
-        <div data-testid="queue-banner" className="flex items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-300">
+        <div data-testid="queue-banner" className="flex items-center gap-3 border-b border-warn/30 bg-warn/10 px-3 py-1.5 text-warn">
           <span>Waiting for {fmtMb(queued?.requiredVramMb ?? manifest.resources.vram_estimate_mb ?? 0)} GPU memory{queued?.reason ? ` — ${queued.reason}` : ""}</span>
           <div className="flex-1" />
           <Btn data-testid="queue-run-anyway" onClick={() => ipc.forceRun(run.id).catch((e) => notify(errMsg(e)))}>Run anyway</Btn>
@@ -127,21 +127,13 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
           : app.hasCustomUi
           ? <div className="min-h-0 flex-1"><AppSandbox app={app} /></div>
           : <div className="min-h-0 flex-1 overflow-y-auto"><AutoForm manifest={manifest} values={values} onChange={setValues} errors={touched ? errors : {}} /></div>}
-        <RunHistory appId={appId} latest={run} selected={viewRunId ?? run?.id ?? null} onSelect={(r) => setViewRunId(r.id === run?.id ? null : r.id)} />
-        <LogConsole runId={viewRunId ?? run?.id ?? null} />
-        <OutputShelf appId={appId} runId={viewRunId ?? run?.id ?? null} />
       </div>
+      <Underbar app={app} latest={run} viewRunId={viewRunId} onViewRun={setViewRunId} values={values} />
       {savingPreset && <PromptModal title="Save preset" label="Preset name" onClose={() => setSavingPreset(false)}
         onOk={(n) => ipc.savePreset(appId, n, values).then(loadPresets).catch((e) => notify(errMsg(e)))} />}
       {removing && <RemoveAppModal appId={appId} name={app.name} onClose={() => setRemoving(false)} />}
     </div>
   );
-}
-
-function RunStatus({ status, exitCode }: { status: string; exitCode: number | null }) {
-  const color = { running: "green", stopping: "amber", queued_vram: "amber", success: "accent", failed: "red", killed: "gray" }[status] as "green";
-  const label = status === "queued_vram" ? "queued" : status;
-  return <Badge color={color}>{label}{exitCode != null && status !== "success" ? ` · exit ${exitCode}` : ""}</Badge>;
 }
 
 function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string; onClose: () => void }) {
@@ -160,7 +152,7 @@ function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string;
   };
   return (
     <Modal testid="remove-app-modal" title={`Remove ${name}?`} onClose={onClose}>
-      <p className="mb-3 text-gray-300">The app folder itself is never deleted. Its run history, presets and artifact records are removed from Homemade.</p>
+      <p className="mb-3 text-fg">The app folder itself is never deleted. Its run history, presets and artifact records are removed from Homemade.</p>
       <label className="mb-1 flex items-center gap-2"><input data-testid="remove-purge-scratch" type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} /> Also delete scratch files</label>
       <label className="flex items-center gap-2"><input data-testid="remove-delete-venv" type="checkbox" checked={venv} onChange={(e) => setVenv(e.target.checked)} /> Also delete the app's virtualenv</label>
       <div className="mt-4 flex justify-end gap-2">
@@ -171,36 +163,27 @@ function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string;
   );
 }
 
-const statusColor: Record<string, string> = {
-  running: "bg-emerald-500/15 text-emerald-400", stopping: "bg-amber-500/15 text-amber-400", queued_vram: "bg-amber-500/15 text-amber-400",
-  success: "bg-accent/15 text-accent", failed: "bg-red-500/15 text-red-400", killed: "bg-white/5 text-gray-400",
-};
-
-function RunHistory({ appId, latest, selected, onSelect }: { appId: string; latest: RunRecord | null; selected: string | null; onSelect: (r: RunRecord) => void }) {
-  const [runs, setRuns] = useState<RunRecord[]>([]);
-  const [open, setOpen] = useState(true);
+/** Header `⋯` menu. Items stay mounted (hidden) so their testids are always reachable. */
+function MoreMenu({ children }: { children: (close: () => void) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ipc.listRuns(appId, 30).then(setRuns).catch(() => setRuns([]));
-  }, [appId, latest?.id, latest?.status]);
-  if (!runs.length) return null;
+    if (!open) return;
+    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
   return (
-    <div className="shrink-0 border-t border-line bg-panel">
-      <button className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-300" onClick={() => setOpen(!open)}>
-        {open ? "▾" : "▸"} Runs <span className="font-normal normal-case text-gray-600">({runs.length})</span>
-      </button>
-      {open && (
-        <div data-testid="run-history" className="flex max-h-24 flex-col overflow-y-auto px-1.5 pb-1">
-          {runs.map((r) => (
-            <button key={r.id} data-testid="run-history-item" data-run-id={r.id} data-status={r.status} onClick={() => onSelect(r)}
-              className={`flex items-center gap-2 rounded px-1.5 py-0.5 text-left text-[11.5px] ${selected === r.id ? "bg-accent/10" : "hover:bg-white/5"}`}>
-              <span className={`w-16 shrink-0 rounded px-1 text-center text-[10px] font-medium uppercase ${statusColor[r.status] ?? statusColor.killed}`}>{r.status === "queued_vram" ? "queued" : r.status}</span>
-              <span className="w-20 shrink-0 text-gray-400">{relTime(r.startedAt)}</span>
-              <span className="w-14 shrink-0 font-mono text-gray-500">{r.exitCode != null ? `exit ${r.exitCode}` : ""}</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-gray-600" title={r.cliCommand}>{r.cliCommand}</span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div ref={ref} className="relative">
+      <Btn data-testid="app-more" variant="ghost" aria-label="More actions" title="More actions" aria-expanded={open} onClick={() => setOpen(!open)}>⋯</Btn>
+      <div data-testid="app-more-menu" hidden={!open} className="absolute right-0 top-full z-40 mt-1 min-w-48 rounded border border-line bg-panel py-1 shadow-xl">
+        {children(() => setOpen(false))}
+      </div>
     </div>
   );
+}
+
+function MenuEntry({ testid, onClick, close, children, title, danger }: { testid: string; onClick: () => void; close: () => void; children: ReactNode; title?: string; danger?: boolean }) {
+  return <button data-testid={testid} title={title} onClick={() => { close(); onClick(); }}
+    className={`flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-panel-2 ${danger ? "text-danger" : ""}`}>{children}</button>;
 }

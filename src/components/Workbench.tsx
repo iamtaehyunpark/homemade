@@ -5,6 +5,7 @@ import { useStore } from "../state/store";
 import { openAppWindow } from "../lib/appWindow";
 import AppPanel from "./AppPanel";
 import AgentTerminal from "./AgentTerminal";
+import { useTheme } from "../lib/theme";
 
 export const appPanelId = (appId: string) => `app:${appId}`;
 export const agentPanelId = (appId: string) => `agent:${appId}`;
@@ -19,9 +20,9 @@ const components = { app: AppPanelHost, agent: AgentPanelHost };
 
 function Watermark() {
   return (
-    <div className="flex h-full items-center justify-center text-gray-500">
+    <div className="flex h-full items-center justify-center text-muted">
       <div className="text-center">
-        <div className="mb-1 text-[15px] text-gray-300">No app open</div>
+        <div className="mb-1 text-[15px] text-fg">No app open</div>
         <div className="text-[12px]">Pick an app in the sidebar, or drop a folder anywhere to import it.</div>
       </div>
     </div>
@@ -34,6 +35,7 @@ export default function Workbench() {
   const selected = useStore((s) => s.selectedAppId);
   const apps = useStore((s) => s.apps);
   const syncing = useRef(false);
+  const theme = useTheme();
 
   const onReady = (e: DockviewReadyEvent) => {
     setApi(e.api);
@@ -84,7 +86,7 @@ export default function Workbench() {
   }, [api, selected]);
 
   return (
-    <div className="dockview-theme-dark h-full w-full">
+    <div className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}>
       <DockviewReact components={components} onReady={onReady} watermarkComponent={Watermark} />
     </div>
   );

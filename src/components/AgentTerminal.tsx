@@ -9,6 +9,12 @@ import { errMsg, relTime } from "../lib/format";
 import { Btn } from "./ui";
 import { terminals } from "../lib/registry";
 import { useStore } from "../state/store";
+import { cssVar, useTheme } from "../lib/theme";
+
+function xtermTheme() {
+  const accent = cssVar("--color-accent");
+  return { background: cssVar("--color-bg"), foreground: cssVar("--color-fg"), cursor: accent, cursorAccent: cssVar("--color-bg"), selectionBackground: accent + "44" };
+}
 
 interface Launch { agentType: AgentType; sessionId?: string; n: number }
 
@@ -50,7 +56,7 @@ export default function AgentTerminal({ appId }: { appId: string }) {
   useEffect(() => {
     const t = new Terminal({
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, cursorBlink: true, allowProposedApi: true, scrollback: 5000,
-      theme: { background: "#0f1115", foreground: "#e6e6e6", cursor: "#6ea8fe", selectionBackground: "#6ea8fe44" },
+      theme: xtermTheme(),
     });
     const f = new FitAddon();
     t.loadAddon(f);
@@ -83,6 +89,10 @@ export default function AgentTerminal({ appId }: { appId: string }) {
       t.dispose();
     };
   }, []);
+
+  // re-apply colors when the app theme changes
+  const theme = useTheme();
+  useEffect(() => { if (term.current) term.current.options.theme = xtermTheme(); }, [theme]);
 
   // (re)spawn on launch change
   useEffect(() => {

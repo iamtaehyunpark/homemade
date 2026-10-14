@@ -47,3 +47,10 @@ pub async fn list_secret_names(state: St<'_>) -> Result<Vec<String>> { crate::st
 pub async fn set_secret(state: St<'_>, name: String, value: String) -> Result<()> { crate::storage::secrets::set(&state.home, &name, &value) }
 #[tauri::command]
 pub async fn delete_secret(state: St<'_>, name: String) -> Result<()> { crate::storage::secrets::delete(&state.home, &name) }
+
+/// Shared-store assets this app touched (storage_refs table).
+#[tauri::command]
+pub async fn storage_refs(state: St<'_>, app_id: String) -> Result<Vec<crate::types::StorageRef>> {
+    let c = state.db.lock().unwrap();
+    crate::db::queries::list_storage_refs(&c, &app_id)
+}

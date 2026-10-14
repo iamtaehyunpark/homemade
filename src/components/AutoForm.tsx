@@ -13,8 +13,8 @@ export default function AutoForm({ manifest, values, onChange, errors }: Props) 
   const set = (k: string, v: unknown) => onChange({ ...values, [k]: v });
   return (
     <div className="mx-auto max-w-3xl px-4 py-3">
-      {manifest.app.description && <p className="mb-3 text-[12px] text-gray-400">{manifest.app.description}</p>}
-      {!entries.length && <p className="text-gray-500">This app takes no inputs. Press Run.</p>}
+      {manifest.app.description && <p className="mb-3 text-[12px] text-muted">{manifest.app.description}</p>}
+      {!entries.length && <p className="text-muted">This app takes no inputs. Press Run.</p>}
       <div className="grid grid-cols-[minmax(110px,180px)_1fr] items-start gap-x-3 gap-y-2.5">
         {entries.map(([k, f]) => (
           <Row key={k} name={k} spec={f} value={values[k]} error={errors[k]} onChange={(v) => set(k, v)} />
@@ -27,12 +27,12 @@ export default function AutoForm({ manifest, values, onChange, errors }: Props) 
 function Row({ name, spec, value, error, onChange }: { name: string; spec: InputFieldSpec; value: unknown; error?: string; onChange: (v: unknown) => void }) {
   return (
     <>
-      <label htmlFor={`f-${name}`} className="pt-1 text-right text-[12px] text-gray-300" title={spec.cli_flag ?? undefined}>
-        {fieldLabel(name, spec)}{spec.required && <span className="text-red-400"> *</span>}
+      <label htmlFor={`f-${name}`} className="pt-1 text-right text-[12px] text-fg" title={spec.cli_flag ?? undefined}>
+        {fieldLabel(name, spec)}{spec.required && <span className="text-danger"> *</span>}
       </label>
       <div className="min-w-0">
         <Widget name={name} spec={spec} value={value} onChange={onChange} invalid={!!error} />
-        {(error || spec.description) && <div className={`mt-0.5 text-[11px] ${error ? "text-red-400" : "text-gray-500"}`}>{error ?? spec.description}</div>}
+        {(error || spec.description) && <div className={`mt-0.5 text-[11px] ${error ? "text-danger" : "text-muted"}`}>{error ?? spec.description}</div>}
       </div>
     </>
   );
@@ -46,8 +46,8 @@ function Widget({ name, spec, value, onChange, invalid }: { name: string; spec: 
     case "bool":
       return (
         <button id={id} role="switch" aria-checked={!!value} onClick={() => onChange(!value)}
-          className={`mt-1 h-4 w-7 rounded-full p-0.5 transition-colors ${value ? "bg-accent" : "bg-[#333845]"}`}>
-          <span className={`block h-3 w-3 rounded-full bg-white transition-transform ${value ? "translate-x-3" : ""}`} />
+          className={`mt-1 h-4 w-7 rounded-full p-0.5 transition-colors ${value ? "bg-accent" : "bg-line"}`}>
+          <span className={`block h-3 w-3 rounded-full bg-panel transition-transform ${value ? "translate-x-3" : ""}`} />
         </button>
       );
     case "select":
@@ -61,7 +61,7 @@ function Widget({ name, spec, value, onChange, invalid }: { name: string; spec: 
       const n = Number(value ?? spec.min ?? 0);
       return (
         <div className="flex items-center gap-2">
-          <input id={id} type="range" className="flex-1 accent-[#6ea8fe]" min={spec.min ?? 0} max={spec.max ?? 100} step={spec.step ?? 1} value={n} onChange={(e) => onChange(Number(e.target.value))} />
+          <input id={id} type="range" className="flex-1 accent-accent" min={spec.min ?? 0} max={spec.max ?? 100} step={spec.step ?? 1} value={n} onChange={(e) => onChange(Number(e.target.value))} />
           <span className="w-12 text-right font-mono text-[12px] tabular-nums">{n}</span>
         </div>
       );
@@ -96,7 +96,7 @@ function PathField({ spec, value, onChange, invalid, id }: { spec: InputFieldSpe
     <div ref={ref} className="rounded">
       <div className="flex gap-1.5">
         {multi
-          ? <div id={id} className="field flex-1 truncate text-gray-400" aria-invalid={invalid}>{list.length ? `${list.length} file${list.length > 1 ? "s" : ""}` : "Drop files or browse"}</div>
+          ? <div id={id} className="field flex-1 truncate text-muted" aria-invalid={invalid}>{list.length ? `${list.length} file${list.length > 1 ? "s" : ""}` : "Drop files or browse"}</div>
           : <input id={id} readOnly className="field flex-1 font-mono" aria-invalid={invalid} value={String(value ?? "")} placeholder={spec.type === "directory" ? "Drop a folder or browse" : "Drop a file or browse"} title={String(value ?? "")} />}
         <Btn onClick={browse}>Browse</Btn>
         {(multi ? list.length > 0 : !!value) && <Btn variant="ghost" onClick={() => onChange(multi ? [] : "")} title="Clear">✕</Btn>}
@@ -104,9 +104,9 @@ function PathField({ spec, value, onChange, invalid, id }: { spec: InputFieldSpe
       {multi && list.length > 0 && (
         <ul className="mt-1 max-h-28 overflow-y-auto rounded border border-line text-[11px]">
           {list.map((p, i) => (
-            <li key={p + i} className="flex items-center px-2 py-0.5 hover:bg-white/5" title={p}>
+            <li key={p + i} className="flex items-center px-2 py-0.5 hover:bg-panel-2" title={p}>
               <span className="flex-1 truncate font-mono">{basename(p)}</span>
-              <button className="text-gray-600 hover:text-red-400" onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button>
+              <button className="text-faint hover:text-danger" title="Remove" onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button>
             </li>
           ))}
         </ul>

@@ -159,7 +159,7 @@ pub fn run() {
             commands::runs::start_run, commands::runs::stop_run, commands::runs::force_run, commands::runs::list_runs, commands::runs::get_run, commands::runs::get_run_log, commands::runs::rpc_call, commands::runs::build_cli_command, commands::runs::list_active_runs,
             commands::presets::list_presets, commands::presets::save_preset, commands::presets::delete_preset,
             commands::artifacts::list_artifacts, commands::artifacts::clean_scratch, commands::artifacts::delete_artifact,
-            commands::storage::storage_summary, commands::storage::scan_venv, commands::storage::migrate_venv, commands::storage::list_secret_names, commands::storage::set_secret, commands::storage::delete_secret,
+            commands::storage::storage_summary, commands::storage::storage_refs, commands::system::app_process_info, commands::storage::scan_venv, commands::storage::migrate_venv, commands::storage::list_secret_names, commands::storage::set_secret, commands::storage::delete_secret,
             commands::resources::resource_snapshot,
             commands::pty::pty_spawn, commands::pty::pty_write, commands::pty::pty_resize, commands::pty::pty_kill, commands::pty::list_ptys,
             commands::agents::detect_agents, commands::agents::list_agent_sessions, commands::agents::install_skill,

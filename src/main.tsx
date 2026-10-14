@@ -3,6 +3,9 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { installTestApi } from "./lib/testApi";
+import { applyTheme } from "./lib/theme";
+
+applyTheme();
 
 installTestApi();
 

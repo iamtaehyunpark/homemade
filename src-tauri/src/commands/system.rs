@@ -106,3 +106,16 @@ pub async fn kill_port_owner(state: St<'_>, pid: i32) -> Result<()> {
     crate::supervisor::reaper::terminate_process_group(if pg > 1 { pg } else { pid }, 1000, 2000).await;
     Ok(())
 }
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessInfo { pub run_id: String, pub pid: i32, pub pgid: i32, pub port: Option<u16> }
+
+/// The active run's process identity for an app (None when nothing is running).
+#[tauri::command]
+pub async fn app_process_info(state: St<'_>, app_id: String) -> Result<Option<ProcessInfo>> {
+    Ok(state.active_runs.iter().find(|e| e.value().app_id == app_id).map(|e| {
+        let r = e.value();
+        ProcessInfo { run_id: r.run_id.clone(), pid: r.pid, pgid: r.pgid, port: *r.port.lock().unwrap() }
+    }))
+}

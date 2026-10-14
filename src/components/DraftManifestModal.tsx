@@ -42,22 +42,22 @@ function DraftBody({ path }: { path: string }) {
     try { await navigator.clipboard.writeText(draft?.agentPrompt ?? ""); useStore.getState().notify("Agent prompt copied"); } catch (e) { useStore.getState().notify(errMsg(e)); }
   };
 
-  const tabCls = (t: string) => `px-2 py-1 text-[12px] border-b-2 ${tab === t ? "border-accent text-accent" : "border-transparent text-gray-400 hover:text-gray-200"}`;
+  const tabCls = (t: string) => `px-2 py-1 text-[12px] border-b-2 ${tab === t ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg"}`;
 
   return (
-    <Modal testid="draft-modal" wide title={<span>Draft manifest · <span className="font-mono text-[12px] text-gray-400">{path}</span></span>} onClose={close}>
+    <Modal testid="draft-modal" wide title={<span>Draft manifest · <span className="font-mono text-[12px] text-muted">{path}</span></span>} onClose={close}>
       {modelStatus?.available === false && (
-        <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
+        <div className="mb-2 rounded border border-warn/30 bg-warn/10 px-2 py-1 text-[11px] text-warn">
           Local model unavailable{modelStatus.reason ? ` (${modelStatus.reason})` : ""} — using deterministic inference.
         </div>
       )}
       {!draft && !error && (
-        <div data-testid="draft-loading" className="flex items-center gap-2 py-10 justify-center text-gray-400">
+        <div data-testid="draft-loading" className="flex items-center gap-2 py-10 justify-center text-muted">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           Reading README and docs…
         </div>
       )}
-      {error && <div data-testid="draft-error" className="py-4 text-red-400">Draft failed: {error}</div>}
+      {error && <div data-testid="draft-error" className="py-4 text-danger">Draft failed: {error}</div>}
       {draft && (<>
         <div className="mb-2 flex items-center gap-1 border-b border-line">
           <button data-testid="draft-tab-manifest" className={tabCls("manifest")} onClick={() => setTab("manifest")}>Manifest</button>
@@ -70,19 +70,19 @@ function DraftBody({ path }: { path: string }) {
         <div className={tab === "manifest" ? "" : "hidden"}>
           <textarea data-testid="draft-toml" spellCheck={false} className="field h-[50vh] w-full resize-y font-mono text-[11.5px] leading-[1.45]" value={toml} onChange={(e) => setToml(e.target.value)} />
           {draft.validationErrors.length > 0 && (
-            <ul data-testid="draft-errors" className="mt-2 list-disc space-y-0.5 pl-5 text-[11px] text-red-400">
+            <ul data-testid="draft-errors" className="mt-2 list-disc space-y-0.5 pl-5 text-[11px] text-danger">
               {draft.validationErrors.map((e, i) => <li key={i}>{e}</li>)}
             </ul>
           )}
           {draft.notes.length > 0 && (
-            <ul data-testid="draft-notes" className="mt-2 list-disc space-y-0.5 pl-5 text-[11px] text-gray-500">
+            <ul data-testid="draft-notes" className="mt-2 list-disc space-y-0.5 pl-5 text-[11px] text-muted">
               {draft.notes.map((n, i) => <li key={i}>{n}</li>)}
             </ul>
           )}
         </div>
         <div className={tab === "prompt" ? "" : "hidden"}>
           <div className="mb-1 flex justify-end"><Btn data-testid="draft-copy-prompt" onClick={copyPrompt}>Copy</Btn></div>
-          <pre data-testid="draft-prompt" className="h-[50vh] overflow-auto whitespace-pre-wrap rounded border border-line bg-bg p-2 font-mono text-[11px] text-gray-300 select-text">{draft.agentPrompt}</pre>
+          <pre data-testid="draft-prompt" className="h-[50vh] overflow-auto whitespace-pre-wrap rounded border border-line bg-bg p-2 font-mono text-[11px] text-fg select-text">{draft.agentPrompt}</pre>
         </div>
       </>)}
       <div className="mt-3 flex justify-end gap-2">

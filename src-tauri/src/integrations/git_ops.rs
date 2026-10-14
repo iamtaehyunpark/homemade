@@ -43,11 +43,11 @@ pub fn is_dirty(root: &Path) -> bool {
 
 pub fn status(root: &Path) -> Result<GitStatus> {
     if !is_repo(root) {
-        return Ok(GitStatus { initialized: false, dirty: false, head: None, log: vec![] });
+        return Ok(GitStatus { initialized: false, dirty: false, head: None, log: vec![], dirty_files: vec![] });
     }
     let head = head_sha(root);
     let log = if head.is_some() {
-        git(root, &["log", "--format=%H%x1f%s%x1f%ct", "-n", "30"])
+        git(root, &["log", "--format=%H%x1f%s%x1f%ct%x1f%P%x1f%D%x1f%an", "-n", "100"])
             .unwrap_or_default()
             .lines()
             .filter_map(|l| {
@@ -55,13 +55,22 @@ pub fn status(root: &Path) -> Result<GitStatus> {
                 let sha = p.next()?.to_string();
                 let message = p.next().unwrap_or("").to_string();
                 let timestamp = p.next().and_then(|t| t.trim().parse::<i64>().ok()).unwrap_or(0) * 1000;
-                Some(GitLogEntry { sha, message, timestamp })
+                let parents = p.next().unwrap_or("").split_whitespace().map(String::from).collect();
+                // %D looks like "HEAD -> main, tag: v1, origin/main"
+                let refs = p.next().unwrap_or("").split(',').flat_map(|r| r.split("->")).map(|r| r.trim().trim_start_matches("tag: ").to_string())
+                    .filter(|r| !r.is_empty()).collect();
+                let author = p.next().unwrap_or("").trim().to_string();
+                Some(GitLogEntry { sha, message, timestamp, parents, refs, author })
             })
             .collect()
     } else {
         vec![]
     };
-    Ok(GitStatus { initialized: true, dirty: is_dirty(root), head, log })
+    let dirty_files = git(root, &["status", "--porcelain"]).unwrap_or_default().lines()
+        .filter(|l| l.len() > 3)
+        .map(|l| crate::types::GitDirtyFile { status: l[..2].trim().to_string(), path: l[3..].trim().to_string() })
+        .take(200).collect::<Vec<_>>();
+    Ok(GitStatus { initialized: true, dirty: !dirty_files.is_empty(), head, log, dirty_files })
 }
 
 /// git init + write .gitignore (if absent) + initial commit "homemade: initial checkpoint".

@@ -72,7 +72,7 @@ function MainApp() {
       )}
       {confirmExit != null && (
         <Modal testid="confirm-exit-modal" title="Quit Homemade?" onClose={() => setConfirmExit(null)}>
-          <p className="text-gray-300">{confirmExit} program{confirmExit === 1 ? " is" : "s are"} running. Stop all and quit?</p>
+          <p className="text-fg">{confirmExit} program{confirmExit === 1 ? " is" : "s are"} running. Stop all and quit?</p>
           <div className="mt-4 flex justify-end gap-2">
             <Btn onClick={() => setConfirmExit(null)}>Cancel</Btn>
             <Btn variant="danger" autoFocus onClick={() => { setConfirmExit(null); ipc.confirmQuit().catch(() => {}); }}>Quit</Btn>

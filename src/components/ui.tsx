@@ -2,10 +2,10 @@ import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode 
 
 type Variant = "default" | "primary" | "danger" | "ghost";
 const variants: Record<Variant, string> = {
-  default: "bg-[#20242d] border-line hover:bg-[#272c37] text-gray-200",
-  primary: "bg-accent/90 border-accent text-[#0b1220] hover:bg-accent font-medium",
-  danger: "bg-red-500/80 border-red-500 text-white hover:bg-red-500",
-  ghost: "bg-transparent border-transparent hover:bg-white/5 text-gray-300",
+  default: "bg-panel-2 border-line hover:bg-line text-fg",
+  primary: "bg-accent/90 border-accent text-on-accent hover:bg-accent font-medium",
+  danger: "bg-danger/90 border-danger text-on-danger hover:bg-danger",
+  ghost: "bg-transparent border-transparent hover:bg-panel-2 text-fg",
 };
 
 export function Btn({ variant = "default", className = "", ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
@@ -13,7 +13,7 @@ export function Btn({ variant = "default", className = "", ...p }: ButtonHTMLAtt
 }
 
 export function Badge({ children, color = "gray", title }: { children: ReactNode; color?: "gray" | "accent" | "green" | "amber" | "red"; title?: string }) {
-  const c = { gray: "bg-white/5 text-gray-400", accent: "bg-accent/15 text-accent", green: "bg-emerald-500/15 text-emerald-400", amber: "bg-amber-500/15 text-amber-400", red: "bg-red-500/15 text-red-400" }[color];
+  const c = { gray: "bg-panel-2 text-muted", accent: "bg-accent/15 text-accent", green: "bg-ok/15 text-ok", amber: "bg-warn/15 text-warn", red: "bg-danger/15 text-danger" }[color];
   return <span title={title} className={`rounded px-1.5 py-px text-[10px] font-medium uppercase tracking-wide ${c}`}>{children}</span>;
 }
 
@@ -24,11 +24,11 @@ export function Modal({ title, onClose, children, wide, testid }: { title: React
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
   return (
-    <div data-testid={testid} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div data-testid={testid} className="fixed inset-0 z-50 flex items-center justify-center bg-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`flex max-h-[90vh] flex-col rounded-lg border border-line bg-panel shadow-2xl ${wide ? "w-[min(90vw,1100px)]" : "w-[420px]"}`}>
         <div className="flex items-center justify-between border-b border-line px-3 py-2">
           <div className="truncate font-medium">{title}</div>
-          <button className="text-gray-500 hover:text-gray-200" onClick={onClose} aria-label="Close">✕</button>
+          <button className="text-muted hover:text-fg" onClick={onClose} aria-label="Close" title="Close (Esc)">✕</button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
       </div>
@@ -44,7 +44,7 @@ export function PromptModal({ title, label, initial = "", okLabel = "Save", onOk
   const submit = () => { if (v.trim()) { onOk(v.trim()); onClose(); } };
   return (
     <Modal title={title} onClose={onClose}>
-      <label className="mb-1 block text-gray-400">{label}</label>
+      <label className="mb-1 block text-muted">{label}</label>
       <input ref={ref} autoFocus className="field w-full" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
       <div className="mt-3 flex justify-end gap-2">
         <Btn onClick={onClose}>Cancel</Btn>
@@ -66,7 +66,7 @@ export function Dropdown({ label, children, align = "left", disabled, testid }: 
   }, [open]);
   return (
     <div ref={ref} className="relative">
-      <Btn data-testid={testid} disabled={disabled} onClick={() => setOpen(!open)}>{label} <span className="text-[9px] text-gray-500">▼</span></Btn>
+      <Btn data-testid={testid} disabled={disabled} onClick={() => setOpen(!open)}>{label} <span className="text-[9px] text-muted">▼</span></Btn>
       {open && (
         <div className={`absolute top-full z-40 mt-1 max-h-80 min-w-48 overflow-auto rounded border border-line bg-panel py-1 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}>
           {children(() => setOpen(false))}
@@ -77,5 +77,12 @@ export function Dropdown({ label, children, align = "left", disabled, testid }: 
 }
 
 export function MenuItem({ onClick, children, disabled, testid }: { onClick: () => void; children: ReactNode; disabled?: boolean; testid?: string }) {
-  return <button data-testid={testid} disabled={disabled} onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-white/5 disabled:opacity-40">{children}</button>;
+  return <button data-testid={testid} disabled={disabled} onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-panel-2 disabled:opacity-40">{children}</button>;
+}
+
+/** Run status pill (Underbar strip). */
+export function RunStatus({ status, exitCode }: { status: string; exitCode: number | null }) {
+  const color = ({ running: "green", stopping: "amber", queued_vram: "amber", success: "accent", failed: "red", killed: "gray" } as const)[status as "running"] ?? "gray";
+  const label = status === "queued_vram" ? "queued" : status;
+  return <span data-testid="run-status" data-status={status}><Badge color={color}>{label}{exitCode != null && status !== "success" ? ` · exit ${exitCode}` : ""}</Badge></span>;
 }
