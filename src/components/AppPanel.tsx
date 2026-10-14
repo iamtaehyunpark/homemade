@@ -111,6 +111,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
             <MenuItem testid="preset-save" onClick={() => { close(); setSavingPreset(true); }}>Save preset…</MenuItem>
           </>)}
         </Dropdown>
+        {containerApi && <Btn data-testid="open-in-window" onClick={() => { openAppWindow(app); useStore.getState().closeApp(app.id); }} title="Open in its own window: just the program, no panels. Closing that window exits the program; ⌘⇧D there brings it back here. Tip: drag this tab out of the dock to do the same.">⧉ Window</Btn>}
         {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""} title="Open a coding agent in this app's folder">Edit with Agent</Btn>}
         {active
           ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
@@ -120,7 +121,6 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
             <MenuEntry testid="copy-cli" close={close} onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</MenuEntry>
             <MenuEntry testid="draft-manifest" close={close} onClick={() => useStore.getState().setDraftPath(app.rootDir)} title="Draft a homemade.toml with the local model">✨ Draft manifest</MenuEntry>
             {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={toggleAgent}>{agentOpen ? "Close agent" : "Edit with Agent"}</MenuEntry>}
-            {containerApi && <MenuEntry testid="open-in-window" close={close} onClick={() => { openAppWindow(app); useStore.getState().closeApp(app.id); }} title="Move this app to its own window (just the program, no panels). ⌘⇧D there brings it back.">Open in new window</MenuEntry>}
             <MenuEntry testid="reveal-app" close={close} onClick={() => ipc.revealInFinder(app.rootDir).catch((e) => notify(errMsg(e)))}>Reveal in Finder</MenuEntry>
             <div className="my-1 border-t border-line" />
             <MenuEntry testid="remove-app" close={close} danger onClick={() => setRemoving(true)} title="Remove app from Homemade">Remove…</MenuEntry>

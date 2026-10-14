@@ -404,7 +404,7 @@ await t("dedicated window: Open in new window pops the app out, dock event bring
   await H.openApp(a.id);
   const label = "app-" + a.id.replace(/[^a-zA-Z0-9_-]/g, "_");
   const panel = `[data-app-panel="${a.id}"] `;
-  H.click(panel + '[data-testid="app-more"]');
+  ok(q(panel + '[data-testid="open-in-window"]'), "Window button missing from header");
   H.click(panel + '[data-testid="open-in-window"]');
   await H.waitFor(async () => (await H.windows()).includes(label), 15000);
   await H.waitFor(() => !H.store.getState().openApps.includes(a.id), 5000);
@@ -415,6 +415,17 @@ await t("dedicated window: Open in new window pops the app out, dock event bring
   ok(!H.store.getState().openApps.includes(a.id), "re-open created a tab while the window was open");
   await H.emit("app://dock", { appId: a.id });
   await H.waitFor(() => H.store.getState().openApps.includes(a.id) && q(panel), 5000);
+  await H.closeWindow(label);
+  await H.waitFor(async () => !(await H.windows()).includes(label), 10000);
+  // Drag the tab out of the dock: dragstart on the tab, dragend outside the dock root → own window.
+  await H.waitFor(() => q(panel), 5000);
+  const tab = qa('.dv-tab').find((el) => el.textContent.trim() === a.name) || q('.dv-tab');
+  ok(tab, "no dockview tab found");
+  const dt = new DataTransfer();
+  tab.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: dt }));
+  await sleep(100);
+  tab.dispatchEvent(new DragEvent("dragend", { bubbles: true, cancelable: true, dataTransfer: dt, clientX: 5, clientY: 5 }));
+  await H.waitFor(async () => (await H.windows()).includes(label), 15000);
   await H.closeWindow(label);
   await H.waitFor(async () => !(await H.windows()).includes(label), 10000);
 });

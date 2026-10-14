@@ -37,8 +37,24 @@ export default function Workbench() {
   const syncing = useRef(false);
   const theme = useTheme();
 
+  const rootRef = useRef<HTMLDivElement>(null);
   const onReady = (e: DockviewReadyEvent) => {
     setApi(e.api);
+    // Drag a tab out of the dock ("to nowhere": the sidebar, outside the window, …) → that program opens in its own window.
+    let dragging: string | null = null;
+    e.api.onWillDragPanel((ev) => { dragging = ev.panel.id.startsWith("app:") ? ev.panel.id.slice(4) : null; });
+    e.api.onDidDrop(() => { dragging = null; });
+    const onDragEnd = (ne: DragEvent) => {
+      const id = dragging; dragging = null;
+      if (!id || !rootRef.current) return;
+      const r = rootRef.current.getBoundingClientRect();
+      const inside = ne.clientX >= r.left && ne.clientX <= r.right && ne.clientY >= r.top && ne.clientY <= r.bottom;
+      if (inside && ne.dataTransfer?.dropEffect !== "none") return; // dockview handled it
+      if (inside) return; // cancelled inside the dock (Esc) — leave the tab alone
+      const app = useStore.getState().apps.find((a) => a.id === id);
+      if (app) { openAppWindow(app); useStore.getState().closeApp(id); }
+    };
+    document.addEventListener("dragend", onDragEnd, true); // Workbench lives for the whole session; no teardown needed
     e.api.onDidRemovePanel((p) => {
       if (syncing.current) return;
       const id = p.id;
@@ -86,7 +102,7 @@ export default function Workbench() {
   }, [api, selected]);
 
   return (
-    <div className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}>
+    <div ref={rootRef} data-testid="dock-root" className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}>
       <DockviewReact components={components} onReady={onReady} watermarkComponent={Watermark} theme={theme === "dark" ? themeDark : themeLight} />
     </div>
   );
