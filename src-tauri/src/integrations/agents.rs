@@ -225,15 +225,19 @@ pub fn merge_with_db(c: &rusqlite::Connection, app_id: &str, found: &[AgentSessi
 }
 
 /// Context appended to a new Claude Code session: points at homemade.toml, the skill, @homemade: directives, and last failed run tail.
-pub fn system_prompt(app_name: &str, root: &Path, last_failed_tail: Option<&str>) -> String {
+pub fn system_prompt(app_name: &str, app_id: &str, root: &Path, last_failed_tail: Option<&str>) -> String {
     let mut s = format!(
         "This project (\"{app_name}\", at {root}) is registered in Homemade, the personal-software launcher. \
 Before editing, read `{root}/homemade.toml` (the app manifest: exec command, [inputs], [ui], [resources], [artifacts]) \
 and the `homemade` skill. Keep homemade.toml in sync with any CLI arguments you add or change. \
 Report progress/artifacts by printing `@homemade:progress <pct> \"msg\"` and `@homemade:artifact \"/abs/path\"` to stdout (flush=True); \
 write outputs to $HOMEMADE_OUTPUT_DIR. Use uv; never create a standalone venv or download duplicate model weights into the project. \
-For a custom UI, use the injected `window.homemade` bridge instead of a web server.",
-        root = root.display()
+For a custom UI, use the injected `window.homemade` bridge instead of a web server.\n\n\
+You can drive Homemade itself at any time: the `homemade` MCP server is connected (tools: start_run, wait_run, get_run_log, \
+last_failed_run, explain_run, list_artifacts, apply_manifest, git_checkpoint, open_app, …), and the `homemade` CLI is on PATH \
+(`homemade run {app_id} key=value --wait`, `homemade log <run-id>`, `homemade help`). Use them to run and verify this app \
+yourself instead of asking the user to click Run.",
+        root = root.display(), app_id = app_id
     );
     if let Some(tail) = last_failed_tail.filter(|t| !t.trim().is_empty()) {
         let lines: Vec<&str> = tail.lines().collect();

@@ -342,3 +342,8 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
 - Late-window catch-up: `ActiveRun.webapp_ready` + `ProcessInfo.ready`; `useTauriEvents` seeds `ports`/`webappReady` from
   `app_process_info` for active runs, so a window opened after a webapp was already serving does not wait forever.
 - Tests: `tests/e2e/control.sh` (run by `runner.sh` on `CONTROL_NOW`, results read back by run.js via `read_text_file`).
+- Children know the launcher (`control::child_env`): every run and PTY gets `<home>/bin` first on PATH plus `HOMEMADE_HOME`,
+  `HOMEMADE_CLI`, `HOMEMADE_MCP_COMMAND`, `HOMEMADE_MCP_CONFIG` (`<home>/mcp.json`, written at launch), `HOMEMADE_CONTROL`.
+  Claude Code PTYs get `--mcp-config <home>/mcp.json` + a system-prompt paragraph about driving Homemade; Codex PTYs get
+  `-c mcp_servers.homemade.*`; interactive custom shells print `control::hint_line()` first. The shim is now installed for
+  every home (test homes included).

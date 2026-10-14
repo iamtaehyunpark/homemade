@@ -153,6 +153,11 @@ await t("env-app: secrets vault, redaction, alias expansion, args input, stderr 
   ok(freed > 0, "clean scratch freed " + freed);
   await H.ipc.deleteSecret("E2E_SECRET");
   ok(!(await H.ipc.listSecretNames()).includes("E2E_SECRET"), "secret not deleted");
+  // Every program Homemade runs can reach the launcher: `homemade` on PATH, MCP pointer in env, and the CLI answers from inside a run.
+  const envLines = (await H.ipc.getRunLog(run.id)).concat(qa('[data-testid="log-line"]').map((e) => e.textContent));
+  ok(envLines.some((l) => /CLI=.*\/bin\/homemade/.test(l)), "homemade CLI not on the run's PATH: " + envLines.filter((l) => /^CLI=/.test(l)).join("|"));
+  ok(envLines.some((l) => /MCP=.* --mcp$/.test(l)), "HOMEMADE_MCP_COMMAND missing");
+  ok(envLines.some((l) => l.includes("CLI_STATUS=ok")), "CLI status from inside a run failed: " + envLines.filter((l) => /CLI_STATUS/.test(l)).join("|"));
 });
 
 await t("venv-app: unmanaged venv scan + dedupe migration + run", async () => {

@@ -146,5 +146,11 @@ homemade log <run-id> --follow
 homemade open frame-extractor --window          # standalone program window
 homemade help                                   # everything else; add --json for machine output
 ```
+Inside anything Homemade spawns (program runs, "Edit with Agent" terminals, shells) this is already set up: `homemade` is on
+PATH, `$HOMEMADE_CLI` is the binary, `$HOMEMADE_MCP_COMMAND` is the MCP command, `$HOMEMADE_MCP_CONFIG` is a ready-made
+`--mcp-config` file, and Claude Code / Codex sessions started from Homemade have the `homemade` MCP server connected.
+So from an agent session you can run and verify the app yourself (`start_run` + `wait_run`, or `homemade run … --wait`)
+instead of asking the user to press Run.
+
 Typical adapt-and-verify loop for an agent: `draft_manifest` → edit → `apply_manifest` → `start_run` + `wait_run` →
 read `log_tail` / `explain_run` → fix the code → `git_checkpoint`.

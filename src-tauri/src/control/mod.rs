@@ -73,19 +73,44 @@ fn write_token(p: &Path, token: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// `<home>/bin/homemade`: a shim that execs this binary, so `export PATH="$HOME/.homemade/bin:$PATH"` gives a `homemade` command.
+/// `<home>/bin/homemade`: a shim that execs this binary, so `export PATH="$HOME/.homemade/bin:$PATH"` gives a `homemade`
+/// command — and every process Homemade spawns gets that dir on PATH (see `child_env`). Also `<home>/mcp.json`, a ready-made
+/// MCP server config (`claude --mcp-config <home>/mcp.json`).
 fn install_cli_shim(home: &Path) {
-    if std::env::var_os("HOMEMADE_HOME").map(|v| !v.is_empty()).unwrap_or(false) { return; } // test/alternate homes never touch the shim
     let Ok(exe) = std::env::current_exe() else { return };
     let dir = home.join("bin");
     if std::fs::create_dir_all(&dir).is_err() { return; }
     let shim = dir.join("homemade");
     let body = format!("#!/bin/sh\n# Installed by Homemade. Runs the launcher's CLI (see `homemade help`).\nexec \"{}\" \"$@\"\n", exe.display());
-    if std::fs::read_to_string(&shim).ok().as_deref() == Some(body.as_str()) { return; }
-    if std::fs::write(&shim, body).is_ok() {
+    if std::fs::read_to_string(&shim).ok().as_deref() != Some(body.as_str()) && std::fs::write(&shim, body).is_ok() {
         #[cfg(unix)]
         { use std::os::unix::fs::PermissionsExt; let _ = std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)); }
     }
+    let mcp = serde_json::json!({ "mcpServers": { "homemade": { "command": exe, "args": ["--mcp"] } } });
+    let _ = std::fs::write(mcp_config_path(home), serde_json::to_string_pretty(&mcp).unwrap_or_default());
+}
+
+pub fn mcp_config_path(home: &Path) -> PathBuf { home.join("mcp.json") }
+
+/// Environment every child of Homemade (program runs, agent terminals, shells) receives so it can always find the launcher:
+/// `<home>/bin` first on PATH (→ `homemade` command), plus explicit pointers for scripts and agents.
+pub fn child_env(home: &Path, path_var: &str) -> Vec<(String, String)> {
+    let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| "homemade".into());
+    let bin = home.join("bin").to_string_lossy().into_owned();
+    let path = if path_var.split(':').any(|p| p == bin) { path_var.to_string() } else if path_var.is_empty() { bin.clone() } else { format!("{bin}:{path_var}") };
+    vec![
+        ("PATH".into(), path),
+        ("HOMEMADE_HOME".into(), home.to_string_lossy().into_owned()),
+        ("HOMEMADE_CLI".into(), exe.clone()),
+        ("HOMEMADE_MCP_COMMAND".into(), format!("{exe} --mcp")),
+        ("HOMEMADE_MCP_CONFIG".into(), mcp_config_path(home).to_string_lossy().into_owned()),
+        ("HOMEMADE_CONTROL".into(), token_path(home).to_string_lossy().into_owned()),
+    ]
+}
+
+/// One line for interactive shells / agents: how to drive the launcher from here.
+pub fn hint_line() -> &'static str {
+    "Homemade: this shell can drive the launcher — `homemade help` (CLI) or the MCP server `$HOMEMADE_MCP_COMMAND` (config: $HOMEMADE_MCP_CONFIG)."
 }
 
 fn s<'a>(p: &'a Value, k: &str) -> Result<&'a str, String> {

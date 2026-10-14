@@ -120,6 +120,9 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     env.insert("HOMEMADE_APP_ID".into(), job.app_id.clone());
     env.insert("HOMEMADE_ROOT".into(), root.to_string_lossy().to_string());
     env.insert("HOMEMADE_OUTPUT_DIR".into(), out_dir.to_string_lossy().to_string());
+    // Programs can drive the launcher too (start sibling runs, read logs, …): `homemade` on PATH + pointers.
+    let cur_path = env.get("PATH").cloned().unwrap_or_default();
+    for (k, v) in crate::control::child_env(&state.home, &cur_path) { env.insert(k, v); }
 
     // ---- pre-run snapshot ----
     let snap_root = root.clone();

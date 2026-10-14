@@ -49,21 +49,29 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
     // --- Build argv ---
     let mut session_id = session_id.filter(|s| !s.trim().is_empty());
     let resuming = session_id.is_some();
+    // Every agent gets Homemade's MCP server wired in (full launcher control) and the system prompt says so.
+    let mcp_cfg = crate::control::mcp_config_path(&state.home).to_string_lossy().to_string();
+    let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| "homemade".into());
     let argv: Vec<String> = match agent_type {
         "claude_code" => {
             let bin = resolve("claude")?;
-            if let Some(id) = &session_id {
+            let prompt = agents::system_prompt(&app.name, app_id, &root, last_failed_tail.as_deref());
+            let mut v = if let Some(id) = &session_id {
                 vec![bin, "--resume".into(), id.clone()]
             } else {
                 let id = uuid::Uuid::new_v4().to_string();
                 session_id = Some(id.clone());
-                let prompt = agents::system_prompt(&app.name, &root, last_failed_tail.as_deref());
-                vec![bin, "--session-id".into(), id, "--append-system-prompt".into(), prompt]
-            }
+                vec![bin, "--session-id".into(), id]
+            };
+            v.extend(["--append-system-prompt".into(), prompt, "--mcp-config".into(), mcp_cfg.clone()]);
+            v
         }
         "codex" => {
             let bin = resolve("codex")?;
-            match &session_id { Some(id) => vec![bin, "resume".into(), id.clone()], None => vec![bin] }
+            let mut v = match &session_id { Some(id) => vec![bin, "resume".into(), id.clone()], None => vec![bin] };
+            v.extend(["-c".into(), format!("mcp_servers.homemade.command={}", serde_json::to_string(&exe).unwrap_or_default()),
+                      "-c".into(), "mcp_servers.homemade.args=[\"--mcp\"]".into()]);
+            v
         }
         "antigravity" => {
             let bin = resolve("agy")?;
@@ -76,7 +84,8 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
             let shell = state.login_env.get("SHELL").cloned().or_else(|| std::env::var("SHELL").ok()).unwrap_or_else(|| "/bin/sh".into());
             match command.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
                 Some(c) => vec![shell, "-lc".into(), c.to_string()],
-                None => vec![shell, "-l".into()],
+                // Interactive shell: print how to reach the launcher, then exec the login shell.
+                None => vec![shell.clone(), "-lc".into(), format!("printf '%s\\n' {}; exec {} -l", shell_words::quote(crate::control::hint_line()), shell_words::quote(&shell))],
             }
         }
         other => return err(format!("unknown agent type: {other}")),
@@ -119,6 +128,7 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
     cmd.env_clear();
     for (k, v) in &state.login_env { cmd.env(k, v); }
     cmd.env("PATH", &path_var);
+    for (k, v) in crate::control::child_env(&state.home, &path_var) { cmd.env(k, v); }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("HOMEMADE_APP_ID", app_id);

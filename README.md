@@ -46,7 +46,7 @@ homemade open thing --window            # open as a standalone program window
 homemade help                           # the rest; --json for scripts
 ```
 
-For agents, register the MCP server once with `claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp`. It exposes the same operations as tools (import, run, wait, stop, logs, artifacts, presets, git checkpoint, open windows, ports, resources). When the GUI is not running, the read-only tools still answer from the database and `launch_gui` starts it.
+Anything Homemade starts already knows this: program runs, agent terminals and shells get `homemade` on PATH and `HOMEMADE_MCP_COMMAND` in their environment, and Claude Code or Codex sessions opened with Edit with Agent have the `homemade` MCP server connected automatically. For agents you start yourself, register the MCP server once with `claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp`. It exposes the same operations as tools (import, run, wait, stop, logs, artifacts, presets, git checkpoint, open windows, ports, resources). When the GUI is not running, the read-only tools still answer from the database and `launch_gui` starts it.
 
 ## Local model (macOS 26+)
 
