@@ -20,22 +20,38 @@ export default function ResourceBar() {
   const r = useStore((s) => s.resources);
   const apps = useStore((s) => s.apps);
   const openApp = useStore((s) => s.openApp);
+  const setView = useStore((s) => s.setView);
+  const selectedAppId = useStore((s) => s.selectedAppId);
   const notify = useStore((s) => s.notify);
   const [qOpen, setQOpen] = useState(false);
   const name = (id: string) => apps.find((a) => a.id === id)?.name ?? id;
+  // "Current program": the selected app's active run (if any); falls back to the first running one.
+  const current = r?.perRun.find((p) => p.appId === selectedAppId) ?? r?.perRun[0];
 
   return (
-    <footer className="relative flex h-7 shrink-0 items-center gap-4 border-t border-line bg-panel px-3 text-[11px]">
+    <footer data-testid="resource-bar" className="relative flex h-7 shrink-0 items-center gap-4 border-t border-line bg-panel px-3 text-[11px]">
       {r ? (<>
-        <Meter label="CPU" pct={r.cpuPct} text={`${r.cpuPct.toFixed(0)}%`} />
-        <Meter label="RAM" pct={(r.ramUsedMb / Math.max(1, r.ramTotalMb)) * 100} text={`${fmtMb(r.ramUsedMb)} / ${fmtMb(r.ramTotalMb)}`} />
-        {r.gpuTotalMb > 0
-          ? <Meter label={r.gpuLabel || "GPU"} pct={(r.gpuUsedMb / r.gpuTotalMb) * 100} text={`${fmtMb(r.gpuUsedMb)} / ${fmtMb(r.gpuTotalMb)}`} />
-          : r.gpuLabel && <span className="text-gray-500">{r.gpuLabel}</span>}
+        <button className="flex items-center gap-4 hover:text-gray-200" title="Open Monitor" onClick={() => setView("monitor")}>
+          <Meter label="CPU" pct={r.cpuPct} text={`${r.cpuPct.toFixed(0)}%`} />
+          <Meter label="RAM" pct={(r.ramUsedMb / Math.max(1, r.ramTotalMb)) * 100} text={`${fmtMb(r.ramUsedMb)} / ${fmtMb(r.ramTotalMb)}`} />
+          {r.gpuTotalMb > 0
+            ? <Meter label={r.gpuLabel || "GPU"} pct={(r.gpuUsedMb / r.gpuTotalMb) * 100} text={`${fmtMb(r.gpuUsedMb)} / ${fmtMb(r.gpuTotalMb)}`} />
+            : r.gpuLabel && <span className="text-gray-500">{r.gpuLabel}</span>}
+        </button>
+        <span className="h-4 w-px bg-line" />
+        {current ? (
+          <button data-testid="resource-current" onClick={() => openApp(current.appId)} className="flex min-w-0 items-center gap-2 rounded bg-emerald-500/10 px-1.5 text-emerald-300 hover:bg-emerald-500/20" title="Current program">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+            <span className="truncate font-medium">{name(current.appId)}</span>
+            <span className="font-mono text-emerald-500/90">CPU {current.cpuPct.toFixed(0)}%</span>
+            <span className="font-mono text-emerald-500/90">RAM {fmtMb(current.ramMb)}</span>
+            {current.vramMb > 0 && <span className="font-mono text-emerald-500/90">GPU {fmtMb(current.vramMb)}</span>}
+          </button>
+        ) : <span className="text-gray-600">No program running</span>}
         <div className="flex min-w-0 flex-1 gap-1 overflow-hidden">
-          {r.perRun.map((p) => (
-            <button key={p.runId} onClick={() => openApp(p.appId)} className="flex shrink-0 items-center gap-1 rounded bg-emerald-500/10 px-1.5 text-emerald-300 hover:bg-emerald-500/20" title={`CPU ${p.cpuPct.toFixed(0)}%${p.vramMb ? ` · VRAM ${fmtMb(p.vramMb)}` : ""}`}>
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{name(p.appId)} <span className="text-emerald-500/80">{fmtMb(p.ramMb)}</span>
+          {r.perRun.filter((p) => p.runId !== current?.runId).map((p) => (
+            <button key={p.runId} onClick={() => openApp(p.appId)} className="flex shrink-0 items-center gap-1 rounded bg-white/5 px-1.5 text-gray-400 hover:bg-white/10" title={`CPU ${p.cpuPct.toFixed(0)}% · RAM ${fmtMb(p.ramMb)}${p.vramMb ? ` · GPU ${fmtMb(p.vramMb)}` : ""}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{name(p.appId)} <span className="font-mono">{p.cpuPct.toFixed(0)}% · {fmtMb(p.ramMb)}</span>
             </button>
           ))}
         </div>

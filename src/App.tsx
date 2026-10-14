@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import Workbench from "./components/Workbench";
 import Sidebar from "./components/Sidebar";
 import Settings from "./components/Settings";
+import Monitor from "./components/Monitor";
 import ResourceBar from "./components/ResourceBar";
 import { Btn, Modal } from "./components/ui";
 import { useTauriEvents } from "./lib/useTauriEvents";
@@ -59,6 +60,7 @@ function MainApp() {
         <main className="relative min-w-0 flex-1">
           <div className={view === "workbench" ? "h-full" : "hidden"}><Workbench /></div>
           {view === "settings" && <Settings />}
+          {view === "monitor" && <Monitor />}
         </main>
       </div>
       <ResourceBar />

@@ -293,6 +293,28 @@ await t("resources + storage summary + settings", async () => {
   await H.waitFor(() => q('[data-testid="settings-secrets"]'), 5000);
 });
 
+await t("monitor pane: graphs, per-run table, footer shows current program's CPU/RAM", async () => {
+  const a = apps["hello-worker"]; // long-lived warm worker gives a stable running row
+  await H.openApp(a.id);
+  const run = await H.ipc.startRun(a.id, {});
+  await waitRun(run.id, ["running"], 10000);
+  // footer: selected app's run must show CPU and RAM, not only memory
+  const cur = await H.waitFor(() => { const el = q('[data-testid="resource-current"]'); return el && /CPU \d+%/.test(el.textContent) && /RAM /.test(el.textContent) ? el : null; }, 15000);
+  await R("  footer current: " + cur.textContent.trim());
+  H.click('[data-testid="monitor-nav"]');
+  await H.waitFor(() => q('[data-testid="monitor-cpu"]') && q('[data-testid="monitor-ram"]') && q('[data-testid="monitor-gpu"]'), 5000);
+  ok(q('[data-testid="monitor-cpu"] polyline'), "cpu graph has no polyline");
+  const n0 = H.store.getState().resourceHistory.length;
+  await H.waitFor(() => H.store.getState().resourceHistory.length > n0 + 1, 5000);
+  ok(H.store.getState().resourceHistory.length > n0 + 1, "history not growing");
+  const row = await H.waitFor(() => qa('[data-testid="monitor-run"]').find((r) => r.textContent.includes(a.name)), 5000);
+  ok(/\d+%/.test(row.textContent) && /(MB|GB|KB)/.test(row.textContent), "run row lacks cpu/ram: " + row.textContent);
+  await H.ipc.stopRun(run.id);
+  await waitRun(run.id, ["killed", "success", "failed"], 15000);
+  await H.waitFor(() => !qa('[data-testid="monitor-run"]').some((r) => r.textContent.includes(a.name)), 10000);
+  H.click('[data-testid="monitor-nav"]'); // back to workbench
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});

@@ -41,7 +41,7 @@ export interface PresetRecord { id: string; appId: string; name: string; inputsJ
 export interface AgentSessionRecord { sessionId: string; appId: string; agentType: AgentType; title: string | null; gitCommitBefore: string | null; gitCommitAfter: string | null; updatedAt: number }
 export interface RunResourceUsage { runId: string; appId: string; cpuPct: number; ramMb: number; vramMb: number }
 export interface QueuedJobInfo { runId: string; appId: string; requiredVramMb: number; reason: string }
-export interface ResourceSnapshot { cpuPct: number; ramUsedMb: number; ramTotalMb: number; gpuUsedMb: number; gpuTotalMb: number; gpuLabel: string; perRun: RunResourceUsage[]; queue: QueuedJobInfo[] }
+export interface ResourceSnapshot { t?: number; cpuPct: number; ramUsedMb: number; ramTotalMb: number; gpuUsedMb: number; gpuTotalMb: number; gpuLabel: string; perRun: RunResourceUsage[]; queue: QueuedJobInfo[] }
 export interface GitLogEntry { sha: string; message: string; timestamp: number }
 export interface GitStatus { initialized: boolean; dirty: boolean; head: string | null; log: GitLogEntry[] }
 export interface DetectedAgent { agentType: AgentType; binaryPath: string; displayName: string }

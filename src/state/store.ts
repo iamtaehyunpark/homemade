@@ -1,5 +1,8 @@
 // OWNER: agent F. Zustand store synced with Tauri events (see CONTRACT.md for every event).
 import { create } from "zustand";
+
+/** Ticks kept for the Monitor graphs (1 Hz → 5 minutes). */
+export const HISTORY_TICKS = 300;
 import type { AppRecord, RunRecord, ResourceSnapshot, QueuedJobInfo } from "../lib/types";
 
 interface HomemadeStore {
@@ -8,7 +11,8 @@ interface HomemadeStore {
   resources: ResourceSnapshot | null;
   selectedAppId: string | null;
   openApps: string[];
-  view: "workbench" | "settings";
+  view: "workbench" | "settings" | "monitor";
+  resourceHistory: ResourceSnapshot[]; // last HISTORY_TICKS ticks (1 Hz), for the Monitor graphs
   confirmExit: number | null;
   artifactTick: Record<string, number>;
   toast: string | null;
@@ -26,7 +30,7 @@ interface HomemadeStore {
   select: (appId: string | null) => void;
   openApp: (appId: string) => void;
   closeApp: (appId: string) => void;
-  setView: (v: "workbench" | "settings") => void;
+  setView: (v: "workbench" | "settings" | "monitor") => void;
   setConfirmExit: (n: number | null) => void;
   bumpArtifacts: (appId: string) => void;
   notify: (msg: string | null) => void;
@@ -36,6 +40,7 @@ export const useStore = create<HomemadeStore>((set) => ({
   apps: [],
   runs: {},
   resources: null,
+  resourceHistory: [],
   selectedAppId: null,
   openApps: [],
   view: "workbench",
@@ -61,7 +66,10 @@ export const useStore = create<HomemadeStore>((set) => ({
   setPort: (runId, port) => set((s) => ({ ports: { ...s.ports, [runId]: port } })),
   setWebappReady: (runId) => set((s) => ({ webappReady: { ...s.webappReady, [runId]: true } })),
   upsertRun: (run) => set((s) => ({ runs: { ...s.runs, [run.id]: run } })),
-  setResources: (resources) => set({ resources }),
+  setResources: (resources) => set((s) => {
+    const h = s.resourceHistory.length >= HISTORY_TICKS ? s.resourceHistory.slice(s.resourceHistory.length - HISTORY_TICKS + 1) : s.resourceHistory;
+    return { resources, resourceHistory: [...h, { ...resources, t: Date.now() } as ResourceSnapshot] };
+  }),
   select: (selectedAppId) => set({ selectedAppId }),
   openApp: (id) => set((s) => ({ openApps: s.openApps.includes(id) ? s.openApps : [...s.openApps, id], selectedAppId: id, view: "workbench" })),
   closeApp: (id) => set((s) => ({ openApps: s.openApps.filter((x) => x !== id) })),

@@ -56,6 +56,10 @@ export default function Sidebar() {
         )}
       </div>
       <div className="border-t border-line p-1.5">
+        <button data-testid="monitor-nav" onClick={() => setView(view === "monitor" ? "workbench" : "monitor")}
+          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${view === "monitor" ? "bg-white/5 text-accent" : "text-gray-300"}`}>
+          📈 Monitor
+        </button>
         <button data-testid="settings" onClick={() => setView(view === "settings" ? "workbench" : "settings")}
           className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${view === "settings" ? "bg-white/5 text-accent" : "text-gray-300"}`}>
           ⚙ Settings
