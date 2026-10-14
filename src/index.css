@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "dockview/dist/styles/dockview.css";
+@import "@xterm/xterm/css/xterm.css";
+
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; margin: 0; background: #0f1115; color: #e6e6e6; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
