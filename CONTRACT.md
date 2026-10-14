@@ -300,6 +300,8 @@ header, consistent empty states, everything "raw program" related reachable from
   window exists (`inWindow`), opening the app from the sidebar focuses the window instead of adding a tab. Capability
   `core:window:allow-set-focus` is required. `window.__hm` gained `emit`, `windows()`, `closeWindow(label)`. `runner.sh` now rebuilds the
   venv fixture and runs `orphan.sh` itself.
+- Launch view (`src/components/Launch.tsx`, `view: "launch"`, sidebar `launch-nav`): grid of `launch-tile[data-app]` (icon = `<root>/icon.png`
+  via the asset protocol, else colored initials; `launch-running` dot), filter box; click = `openAppWindow` + `closeApp`.
 
 ### Backend additions (lead)
 - `GitLogEntry` gains `parents: string[]`, `refs: string[]` (decorations, e.g. ["HEAD -> main", "main"] split into ["HEAD", "main"]), `author: string`.

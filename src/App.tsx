@@ -4,6 +4,7 @@ import Workbench from "./components/Workbench";
 import Sidebar from "./components/Sidebar";
 import Settings from "./components/Settings";
 import Monitor from "./components/Monitor";
+import Launch from "./components/Launch";
 import ResourceBar from "./components/ResourceBar";
 import { Btn, Modal } from "./components/ui";
 import { useTauriEvents } from "./lib/useTauriEvents";
@@ -63,6 +64,7 @@ function MainApp() {
           <div className={view === "workbench" ? "h-full" : "hidden"}><Workbench /></div>
           {view === "settings" && <Settings />}
           {view === "monitor" && <Monitor />}
+          {view === "launch" && <Launch />}
         </main>
       </div>
       <ResourceBar />

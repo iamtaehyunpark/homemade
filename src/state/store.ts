@@ -11,7 +11,7 @@ interface HomemadeStore {
   resources: ResourceSnapshot | null;
   selectedAppId: string | null;
   openApps: string[];
-  view: "workbench" | "settings" | "monitor";
+  view: "workbench" | "settings" | "monitor" | "launch";
   resourceHistory: ResourceSnapshot[]; // last HISTORY_TICKS ticks (1 Hz), for the Monitor graphs
   confirmExit: number | null;
   artifactTick: Record<string, number>;
@@ -38,7 +38,7 @@ interface HomemadeStore {
   select: (appId: string | null) => void;
   openApp: (appId: string) => void;
   closeApp: (appId: string) => void;
-  setView: (v: "workbench" | "settings" | "monitor") => void;
+  setView: (v: HomemadeStore["view"]) => void;
   setConfirmExit: (n: number | null) => void;
   bumpArtifacts: (appId: string) => void;
   notify: (msg: string | null) => void;

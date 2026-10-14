@@ -73,6 +73,10 @@ export default function Sidebar() {
         )}
       </div>
       <div className="border-t border-line p-1.5">
+        <button data-testid="launch-nav" onClick={() => setView(view === "launch" ? "workbench" : "launch")} title="Program launcher: open any program in its own window"
+          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2 ${view === "launch" ? "bg-panel-2 text-accent" : "text-fg"}`}>
+          🚀 Launch
+        </button>
         <button data-testid="monitor-nav" onClick={() => setView(view === "monitor" ? "workbench" : "monitor")}
           className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2 ${view === "monitor" ? "bg-panel-2 text-accent" : "text-fg"}`}>
           📈 Monitor

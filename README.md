@@ -31,7 +31,7 @@ Runs one registered app end to end and prints the status, log tail and artifacts
 
 ## Dedicated windows
 
-Any app can run as if it were a program of its own: open it and choose **⋯ → Open in new window**. That window contains only the program (its web UI, custom UI, or input form with a Run button), with no sidebar, header, or Underbar. Web apps start their server as soon as the window opens. Press **⌘⇧D** in the window to bring the app back into the main window as a tab, or just close it. Logs, runs and git stay available in the main window. To make an app always open this way, set `default_layout = "window"` under `[ui]` in its `homemade.toml`.
+Any app can run as if it were a program of its own: open it and choose **⋯ → Open in new window**, or use the **Launch** page in the sidebar, a grid of program tiles that opens any program in its own window with one click. Put an `icon.png` in the project root to use it as the tile. That window contains only the program (its web UI, custom UI, or input form with a Run button), with no sidebar, header, or Underbar. Web apps start their server as soon as the window opens. Press **⌘⇧D** in the window to bring the app back into the main window as a tab, or just close it. Logs, runs and git stay available in the main window. To make an app always open this way, set `default_layout = "window"` under `[ui]` in its `homemade.toml`.
 
 ## Local model (macOS 26+)
 

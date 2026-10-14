@@ -419,6 +419,20 @@ await t("dedicated window: Open in new window pops the app out, dock event bring
   await H.waitFor(async () => !(await H.windows()).includes(label), 10000);
 });
 
+await t("launch view: tiles list programs and open them in a solo window", async () => {
+  H.store.getState().setView("launch");
+  await H.waitFor(() => q('[data-testid="launch-view"]'), 5000);
+  const tiles = qa('[data-testid="launch-tile"]');
+  ok(tiles.length >= 8, "tiles " + tiles.length);
+  const a = apps["hello-ui"];
+  const label = "app-" + a.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  H.click(`[data-testid="launch-tile"][data-app="${a.id}"]`);
+  await H.waitFor(async () => (await H.windows()).includes(label), 15000);
+  await H.closeWindow(label);
+  await H.waitFor(async () => !(await H.windows()).includes(label), 10000);
+  H.store.getState().setView("workbench");
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});
