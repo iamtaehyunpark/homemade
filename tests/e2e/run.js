@@ -428,8 +428,22 @@ await t("launch view: tiles list programs and open them in a solo window", async
   const label = "app-" + a.id.replace(/[^a-zA-Z0-9_-]/g, "_");
   H.click(`[data-testid="launch-tile"][data-app="${a.id}"]`);
   await H.waitFor(async () => (await H.windows()).includes(label), 15000);
+  await H.waitFor(() => !q(`[data-testid="launch-tile"][data-app="${a.id}"]`), 5000); // launched programs leave the grid
   await H.closeWindow(label);
   await H.waitFor(async () => !(await H.windows()).includes(label), 10000);
+  await H.waitFor(() => q(`[data-testid="launch-tile"][data-app="${a.id}"]`), 5000); // and come back when the window closes
+  // Closing a program's window exits the program: the webapp tile auto-starts a server; closing must end that run.
+  const w = apps["webapp-app"];
+  const wl = "app-" + w.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  H.click(`[data-testid="launch-tile"][data-app="${w.id}"]`);
+  await H.waitFor(async () => (await H.windows()).includes(wl), 15000);
+  const run = await H.waitFor(() => Object.values(H.store.getState().runs).find((r) => r.appId === w.id && r.status === "running"), 15000);
+  await H.closeWindow(wl);
+  await H.waitFor(async () => !(await H.windows()).includes(wl), 20000);
+  const fin = await waitRun(run.id, ["killed", "success", "failed"], 20000);
+  ok(fin.status === "killed", "webapp run should be stopped by window close, got " + fin.status);
+  const active = await H.ipc.listActiveRuns();
+  ok(!active.some((r) => r.appId === w.id), "webapp still active after window close");
   H.store.getState().setView("workbench");
 });
 

@@ -14,6 +14,9 @@ interface HomemadeStore {
   view: "workbench" | "settings" | "monitor" | "launch";
   resourceHistory: ResourceSnapshot[]; // last HISTORY_TICKS ticks (1 Hz), for the Monitor graphs
   confirmExit: number | null;
+  /** Apps currently living in their own solo window (main window only). */
+  windowed: Record<string, true>;
+  setWindowed: (appId: string, on: boolean) => void;
   artifactTick: Record<string, number>;
   toast: string | null;
   queued: Record<string, QueuedJobInfo>; // by run id, from run://queued
@@ -53,6 +56,8 @@ export const useStore = create<HomemadeStore>((set) => ({
   openApps: [],
   view: "workbench",
   confirmExit: null,
+  windowed: {},
+  setWindowed: (appId, on) => set((s) => { const w = { ...s.windowed }; if (on) w[appId] = true; else delete w[appId]; return { windowed: w }; }),
   artifactTick: {},
   toast: null,
   queued: {},

@@ -13,6 +13,7 @@ import { ipc } from "./lib/ipc";
 import { useStore } from "./state/store";
 import AppPanel from "./components/AppPanel";
 import DraftManifestModal from "./components/DraftManifestModal";
+import { installSoloCloseGuard } from "./lib/appWindow";
 
 const params = new URLSearchParams(window.location.search);
 const standaloneAppId = params.get("app");
@@ -21,6 +22,7 @@ const standaloneAppId = params.get("app");
 function StandaloneApp({ appId }: { appId: string }) {
   useTauriEvents();
   useEffect(() => startDropRouter(), []);
+  useEffect(() => installSoloCloseGuard(appId), [appId]);
   const toast = useStore((s) => s.toast);
   const notify = useStore((s) => s.notify);
   useEffect(() => {

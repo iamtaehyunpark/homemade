@@ -301,7 +301,9 @@ header, consistent empty states, everything "raw program" related reachable from
   `core:window:allow-set-focus` is required. `window.__hm` gained `emit`, `windows()`, `closeWindow(label)`. `runner.sh` now rebuilds the
   venv fixture and runs `orphan.sh` itself.
 - Launch view (`src/components/Launch.tsx`, `view: "launch"`, sidebar `launch-nav`): grid of `launch-tile[data-app]` (icon = `<root>/icon.png`
-  via the asset protocol, else colored initials; `launch-running` dot), filter box; click = `openAppWindow` + `closeApp`.
+  via the asset protocol, else colored initials; `launch-running` dot), filter box; click = `openAppWindow` + `closeApp`. Windowed apps (`store.windowed`, kept by `appWindow.ts`) are hidden
+  from the grid (`launch-open-count` line). Solo windows install `installSoloCloseGuard`: close-requested → `stop_run` for the app's
+  active runs, wait ≤15 s for them to end, then `destroy()` — closing the window is a clean exit of the program.
 
 ### Backend additions (lead)
 - `GitLogEntry` gains `parents: string[]`, `refs: string[]` (decorations, e.g. ["HEAD -> main", "main"] split into ["HEAD", "main"]), `author: string`.

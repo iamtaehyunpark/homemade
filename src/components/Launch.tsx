@@ -13,9 +13,12 @@ const initials = (name: string) => name.split(/[\s_-]+/).filter(Boolean).slice(0
 export default function Launch() {
   const apps = useStore((s) => s.apps);
   const runs = useStore((s) => s.runs);
+  const windowed = useStore((s) => s.windowed);
   const [filter, setFilter] = useState("");
   const running = new Set(Object.values(runs).filter((r) => isActive(r.status)).map((r) => r.appId));
-  const shown = apps.filter((a) => a.name.toLowerCase().includes(filter.toLowerCase())).sort((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0));
+  // A program that already has its own window is "launched": it leaves the grid until that window closes.
+  const shown = apps.filter((a) => !windowed[a.id] && a.name.toLowerCase().includes(filter.toLowerCase())).sort((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0));
+  const openCount = apps.filter((a) => windowed[a.id]).length;
   return (
     <div data-testid="launch-view" className="flex h-full flex-col overflow-y-auto bg-bg p-6">
       <div className="mb-5 flex items-center gap-3">
@@ -26,6 +29,8 @@ export default function Launch() {
           className="w-48 rounded border border-line bg-panel px-2 py-1 outline-none focus:border-accent" />
       </div>
       {!apps.length && <div className="text-muted">No programs yet — import one from the sidebar.</div>}
+      {!!apps.length && !shown.length && <div className="text-muted">{openCount ? "All programs are open in their own windows." : "No program matches."}</div>}
+      {openCount > 0 && <div data-testid="launch-open-count" className="mb-3 text-[11px] text-faint">{openCount} open in own window{openCount > 1 ? "s" : ""} — closing a window exits that program.</div>}
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))" }}>
         {shown.map((a) => <Tile key={a.id} app={a} running={running.has(a.id)} />)}
       </div>
