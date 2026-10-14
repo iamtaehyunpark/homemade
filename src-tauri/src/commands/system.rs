@@ -32,3 +32,15 @@ pub async fn read_text_file(path: String) -> Result<String> {
     if meta.len() > 2 * 1024 * 1024 { return crate::error::err("file too large"); }
     Ok(std::fs::read_to_string(&path)?)
 }
+
+/// E2E harness: print a line to stderr.
+#[tauri::command]
+pub async fn e2e_report(msg: String) -> Result<()> { eprintln!("[e2e] {msg}"); Ok(()) }
+/// E2E harness: stop everything and exit with a code.
+#[tauri::command]
+pub async fn e2e_done(state: St<'_>, code: i32) -> Result<()> {
+    crate::supervisor::spawner::stop_all(state.inner().clone()).await;
+    eprintln!("[e2e] done code={code}");
+    state.app_handle.exit(code);
+    Ok(())
+}

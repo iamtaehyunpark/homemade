@@ -228,7 +228,7 @@ kill_timeout_ms = 2000                 # Time between SIGTERM and SIGKILL
 [environment]
 # Keys pulled from HOMEMADE OS Keychain Vault and injected at runtime
 secrets = ["OPENAI_API_KEY", "HF_TOKEN"]
-# Custom env overrides (supports global aliases like $DATA_DIR)
+# Custom env overrides. `$NAME` / `${NAME}` expand from [aliases] in ~/.homemade/config.toml, then from the login env.
 vars = { WHISPER_MODEL = "large-v3", OUTPUT_DIR = "./outputs" }
 
 [artifacts]
@@ -258,6 +258,11 @@ min = 0.0
 max = 1.0
 step = 0.05
 default = 0.0
+
+# Free-text passthrough: type = "args" appends shell-split extra arguments verbatim (also the inference fallback when no CLI is detected)
+[inputs.extra]
+type = "args"
+label = "Extra arguments"
 
 [inputs.translate]
 type = "bool"
@@ -781,6 +786,26 @@ When the user selects a session from the dropdown above the `xterm.js` pane:
 
 * **Resume Claude Code:** Spawns `claude --resume <session_id>` inside `portable-pty` with `cwd = app.root_dir`.
 * **New Session (deterministic provenance):** `homemade` pre-generates a UUID and spawns `claude --session-id <uuid> --append-system-prompt "<homemade context>"`, so the `agent_sessions` row can be written *before* the session starts instead of guessed from file mtimes afterwards. The appended context points at `homemade.toml`, the installed skill, and the app's last failed run log tail (if any).
+
+### D. Local MCP Server for Coding Agents (`integrations/mcp_server.rs`)
+
+Launched as `homemade --mcp` (the same binary; no window). Speaks MCP over stdio (JSON-RPC 2.0: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`). Opens `~/.homemade/state.db` **read-only** so an agent can inspect launcher state without the GUI running. Tools:
+
+| Tool | Args | Returns |
+|---|---|---|
+| `list_apps` | – | id, name, root_dir, mode, last_run_at |
+| `get_app` | `app_id` | manifest (parsed from disk) + root_dir + has_custom_ui |
+| `list_runs` | `app_id`, `limit?` | runs newest first (status, exit_code, cli_command, started/finished) |
+| `get_run_log` | `run_id` | `log_tail` text |
+| `last_failed_run` | `app_id` | most recent failed/killed run + its log tail, or null |
+| `list_artifacts` | `app_id`, `run_id?` | artifact rows |
+| `validate_manifest` | `toml_text` | `{ok, errors[], normalized_toml}` using the same serde schema |
+
+Registration (documented in `SKILL.md`): `claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp`. Runs are intentionally not startable over MCP in v1; they go through the GUI so the user sees them.
+
+### E. Auto-Checkpoint Policy
+
+`~/.homemade/config.toml` `[git] auto_checkpoint = true` (default). When true and the app root is a git repo, `homemade` commits dirty state before an agent PTY starts (`homemade: before <agent> session`) and after it exits (`homemade: after <agent> session <short title>`), storing both SHAs in `agent_sessions`. When false, only the SHAs are recorded.
 
 ### C. Git Checkpoint & 1-Click Revert (`integrations/git_ops.rs`)
 

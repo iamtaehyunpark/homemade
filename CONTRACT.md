@@ -93,3 +93,31 @@ RPC request written to worker stdin (A): `{"id":"<uuid>","method":"name","params
 2. `examples/hello-ui/` — same script but with `ui/index.html` using `window.homemade.run`, `onProgress`, `assetUrl` to show the output.
 3. `examples/hello-worker/` — `mode = "rpc_worker"`, imports `homemade_worker` (copy the file into the example or add `resources/` to `PYTHONPATH` — A: add `HOMEMADE_RESOURCES` to the child env and put the resources dir on `PYTHONPATH`), exposes `add(a,b)` and `slow(n)` emitting progress; UI calls them.
 4. `examples/no-manifest/` — a bare argparse script with no `homemade.toml`, to exercise inference.
+
+## Gap-closing pass (2026-10-13, round 2)
+
+### E2E harness (owned by the lead; agents must keep it working)
+- Rust: `HOMEMADE_E2E=<script.js>` evals the script in the main webview ~1.5s after setup. Commands `e2e_report(msg)` prints `[e2e] msg` to stderr; `e2e_done(code)` exits the process.
+- Frontend exposes `window.__hm` (always, it's harmless):
+  ```ts
+  window.__hm = {
+    ipc, events, on,                       // from src/lib/ipc.ts
+    store: useStore, live: useLiveStore,   // zustand hooks; use .getState()
+    openApp(appId): Promise<void>,         // select in sidebar + open panel; resolves when the panel's DOM exists
+    click(sel): void,                      // querySelector + .click()
+    setInput(sel, value): void,            // React-safe value set (native setter + input event)
+    waitFor(fn: () => any, timeoutMs?): Promise<any>, // polls every 100ms until truthy
+    sandboxEval(appId, code: string): Promise<any>,   // runs `code` inside the app's custom-UI iframe via bridge `e2e_eval`; resolves with its result
+    termText(ptyId): string,               // current xterm buffer text for an open AgentTerminal
+    report(msg): Promise<void>, done(code): Promise<void>,
+  }
+  ```
+- Bridge: accepts `{homemade:1, type:"e2e_eval", id, code}` from `window.parent` **only** after `init` carried `e2e: true`; replies `{homemade:1, type:"e2e_result", id, ok, result|error}`. Host sets `e2e: true` in `init` always (the host is trusted).
+- `data-testid` attributes required on: `sidebar-app-<id>`, `import-app`, `run-button`, `stop-button`, `copy-cli`, `preset-save`, `preset-select`, `edit-with-agent`, `git-init`, `git-checkpoint`, `git-log`, `git-revert-<sha>`, `output-shelf`, `shelf-item`, `clean-scratch`, `remove-app`, `log-console`, `log-line` (+ `data-stream="stdout|stderr"`), `progress-bar`, `queue-banner`, `queue-run-anyway`, `venv-dedupe`, `app-sandbox` (iframe; set `data-bridge="ready"` once init was sent), `agent-terminal` (+ `data-pty-id`), `terminal-agent-select`, `terminal-session-select`, `terminal-new`, `confirm-exit-modal`, `settings`, `settings-secrets`, `run-history`, `run-history-item`.
+
+### Backend additions
+- `InputFieldSpec.field_type == "args"`: free-text, `build_argv` appends `shell_words::split(value)`; inference fallback emits a single `extra` field of this type when no CLI is detected.
+- Env var values: `$NAME`/`${NAME}` expansion from `[aliases]` in `~/.homemade/config.toml`, then login env.
+- Log ring: lines from stderr are stored with a `[stderr] ` prefix (frontend strips + colors); directive lines are NOT stored in the ring/log_tail.
+- `storage_refs`: after each run, every top-level directory under `~/.homemade/store/shared_cache/*/` that was modified during the run (mtime >= run start) is upserted with its size for that app.
+- `--mcp` flag: `main.rs` dispatches to `integrations::mcp_server::run_stdio()` before Tauri starts.

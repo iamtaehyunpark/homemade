@@ -77,6 +77,23 @@ pub fn run() {
                 });
             }
 
+            // E2E harness: HOMEMADE_E2E=<script.js> is evaluated inside the main webview after load.
+            if let Ok(script_path) = std::env::var("HOMEMADE_E2E") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    match std::fs::read_to_string(&script_path) {
+                        Ok(js) => {
+                            if let Some(w) = handle.get_webview_window("main") {
+                                let wrapped = format!("(async () => {{ try {{ {js} }} catch (e) {{ await window.__hm.report('SCRIPT ERROR: ' + (e && e.stack || e)); await window.__hm.done(9); }} }})();");
+                                if let Err(e) = w.eval(&wrapped) { eprintln!("[e2e] eval failed: {e}"); handle.exit(8); }
+                            }
+                        }
+                        Err(e) => { eprintln!("[e2e] cannot read script: {e}"); handle.exit(8); }
+                    }
+                });
+            }
+
             // Close guard (spec §5C).
             if let Some(win) = app.get_webview_window("main") {
                 let st = state.clone();
@@ -110,7 +127,7 @@ pub fn run() {
             commands::pty::pty_spawn, commands::pty::pty_write, commands::pty::pty_resize, commands::pty::pty_kill, commands::pty::list_ptys,
             commands::agents::detect_agents, commands::agents::list_agent_sessions, commands::agents::install_skill,
             commands::git::git_status, commands::git::git_init, commands::git::git_checkpoint, commands::git::git_revert_to,
-            commands::system::active_count, commands::system::confirm_quit, commands::system::reveal_in_finder, commands::system::homemade_home, commands::system::read_text_file,
+            commands::system::active_count, commands::system::confirm_quit, commands::system::reveal_in_finder, commands::system::homemade_home, commands::system::read_text_file, commands::system::e2e_report, commands::system::e2e_done,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Homemade");
