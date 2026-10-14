@@ -45,6 +45,38 @@ pub fn run() {
             let res_dir = commands::resources_dir(app.handle());
             let _ = integrations::skill::install(&res_dir, &home);
 
+            // Headless smoke hook: HOMEMADE_SMOKE=<app_id> [HOMEMADE_SMOKE_INPUTS='{"name":"x"}'] runs one job and exits.
+            if let Ok(app_id) = std::env::var("HOMEMADE_SMOKE") {
+                let st = state.clone();
+                let res_dir = res_dir.clone();
+                let inputs: serde_json::Value = std::env::var("HOMEMADE_SMOKE_INPUTS").ok()
+                    .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::json!({}));
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    eprintln!("[smoke] starting {app_id} with {inputs}");
+                    let rec = match commands::runs::start_run_inner(st.clone(), res_dir, app_id.clone(), inputs).await {
+                        Ok(r) => r,
+                        Err(e) => { eprintln!("[smoke] start failed: {e}"); st.app_handle.exit(2); return; }
+                    };
+                    eprintln!("[smoke] run {} cmd: {}", rec.id, rec.cli_command);
+                    for _ in 0..120 {
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        let r = { let c = st.db.lock().unwrap(); db::queries::get_run(&c, &rec.id).ok().flatten() };
+                        if let Some(r) = r {
+                            if matches!(r.status.as_str(), "success" | "failed" | "killed") {
+                                let arts = { let c = st.db.lock().unwrap(); db::queries::list_artifacts(&c, &app_id, Some(&rec.id), None).unwrap_or_default() };
+                                eprintln!("[smoke] status={} exit={:?} peak_ram_mb={}\n[smoke] log tail:\n{}\n[smoke] artifacts: {:?}",
+                                    r.status, r.exit_code, r.peak_ram_mb, r.log_tail.unwrap_or_default(),
+                                    arts.iter().map(|a| format!("{} ({}, {} bytes)", a.file_path, a.kind, a.file_size_bytes)).collect::<Vec<_>>());
+                                st.app_handle.exit(if r.status == "success" { 0 } else { 1 });
+                                return;
+                            }
+                        }
+                    }
+                    eprintln!("[smoke] timeout"); st.app_handle.exit(3);
+                });
+            }
+
             // Close guard (spec §5C).
             if let Some(win) = app.get_webview_window("main") {
                 let st = state.clone();

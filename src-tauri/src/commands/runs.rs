@@ -10,13 +10,17 @@ use std::path::PathBuf;
 /// manifest::cli::build_argv, then scheduler::submit. Returns the RunRecord as inserted.
 #[tauri::command]
 pub async fn start_run(state: St<'_>, app: tauri::AppHandle, app_id: String, inputs: Value) -> Result<RunRecord> {
-    let st = state.inner().clone();
+    let res_dir = super::resources_dir(&app);
+    start_run_inner(state.inner().clone(), res_dir, app_id, inputs).await
+}
+
+/// Plain-function version usable outside the IPC layer (smoke hook, future CLI).
+pub async fn start_run_inner(st: std::sync::Arc<crate::state::AppState>, res_dir: PathBuf, app_id: String, inputs: Value) -> Result<RunRecord> {
     let row = {
         let c = st.db.lock().unwrap();
         crate::db::queries::get_app(&c, &app_id)?
     };
     let Some(row) = row else { return crate::error::err(format!("Unknown app: {app_id}")) };
-    let res_dir = super::resources_dir(&app);
     let root = PathBuf::from(&row.root_dir);
     let (manifest, _hash, _inferred) = {
         let (r, d) = (root.clone(), res_dir.clone());
