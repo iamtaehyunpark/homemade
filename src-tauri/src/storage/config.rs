@@ -1,5 +1,11 @@
 //! ~/.homemade/config.toml access. Missing/invalid file => empty table.
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// `$HOMEMADE_HOME` if set (tests, parallel profiles), else `~/.homemade`.
+pub fn homemade_home() -> PathBuf {
+    if let Some(h) = std::env::var_os("HOMEMADE_HOME").filter(|v| !v.is_empty()) { return PathBuf::from(h); }
+    dirs::home_dir().expect("home dir").join(".homemade")
+}
 
 /// Load `<home>/config.toml` as a TOML table (empty on missing or parse error).
 pub fn load(home: &Path) -> toml::Table {

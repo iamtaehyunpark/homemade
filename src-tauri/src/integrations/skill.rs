@@ -17,8 +17,9 @@ pub fn install(resources_dir: &Path, home: &Path) -> Result<String> {
     let dest = dir.join("SKILL.md");
     std::fs::write(&dest, content)?;
 
-    // Best-effort symlink ~/.claude/skills/homemade -> dir
-    if let Some(user_home) = dirs::home_dir() {
+    // Best-effort symlink ~/.claude/skills/homemade -> dir. Only for the default home: a test/alternate
+    // HOMEMADE_HOME must never re-point the user's skill link at itself.
+    if std::env::var_os("HOMEMADE_HOME").map(|v| v.is_empty()).unwrap_or(true) { if let Some(user_home) = dirs::home_dir() {
         let skills = user_home.join(".claude").join("skills");
         let link = skills.join("homemade");
         let _ = std::fs::create_dir_all(&skills);
@@ -34,6 +35,7 @@ pub fn install(resources_dir: &Path, home: &Path) -> Result<String> {
                 let _ = std::os::unix::fs::symlink(&dir, &link);
             }
         }
-    }
+    } }
     Ok(dest.to_string_lossy().to_string())
 }
+

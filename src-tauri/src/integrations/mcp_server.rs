@@ -16,14 +16,14 @@ static MODEL: std::sync::OnceLock<(PathBuf, crate::intelligence::local_model::Lo
 fn model() -> &'static (PathBuf, crate::intelligence::local_model::LocalModel) {
     MODEL.get_or_init(|| {
         let res = crate::commands::resources_dir_from_exe();
-        let cfg = dirs::home_dir().map(|h| crate::storage::config::load(&h.join(".homemade"))).unwrap_or_default();
+        let cfg = crate::storage::config::load(&crate::storage::config::homemade_home());
         let m = crate::intelligence::local_model::LocalModel::new(&res, &cfg);
         (res, m)
     })
 }
 
 fn db_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".homemade").join("state.db"))
+    Some(crate::storage::config::homemade_home().join("state.db"))
 }
 
 fn open_db() -> std::result::Result<Connection, String> {

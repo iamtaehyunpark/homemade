@@ -23,7 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
         .setup(|app| {
-            let home = dirs::home_dir().expect("home dir").join(".homemade");
+            let home = storage::config::homemade_home();
             storage::env_router::ensure_layout(&home)?;
             let conn = db::open(&home.join("state.db"))?;
             let login_env = supervisor::spawner::load_user_login_env();

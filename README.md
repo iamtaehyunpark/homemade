@@ -27,6 +27,8 @@ Runs one registered app end to end and prints the status, log tail and artifacts
 - `src-tauri/resources/` files shipped with the app: `ast_inspector.py`, `homemade_worker.py`, `homemade-bridge.js`, `SKILL.md` (auto-installed to `~/.claude/skills/homemade`).
 - State lives in `~/.homemade/`.
 
+`HOMEMADE_HOME=<dir>` overrides `~/.homemade` (separate profiles, tests).
+
 ## Local model (macOS 26+)
 
 Homemade uses Apple's on-device Foundation Model (the one behind Apple Intelligence) through a 60 KB helper. Nothing is downloaded and nothing runs while idle. It powers:

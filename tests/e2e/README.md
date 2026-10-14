@@ -5,3 +5,5 @@
 `orphan.sh` must run before the app launches (see `runner.sh`): it plants a detached HTTP server and a `runs` row marked running so the "orphan reaped at startup" test has something to find.
 
 Local-model tests need two more fixtures under `F`: `readme-app/` (a README documenting `thumbs.py --src --size --out --grayscale`, script without argparse, no manifest) and `fail-app/` (manifest + `main.py` that prints a FileNotFoundError traceback and exits 1). They require macOS 26+ with Apple Intelligence enabled.
+
+The runner sets `HOMEMADE_HOME=<fixtures>/home` so the suite never touches `~/.homemade`; `orphan.sh` bootstraps that home (schema cloned from the real DB, config with the `E2E_ALIAS` alias, a fake Claude session under `~/.claude/projects`, and the planted orphan).
