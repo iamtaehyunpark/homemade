@@ -8,6 +8,7 @@ Import any of these folders with **Import App** (or drag the folder onto the Hom
 | `hello-ui/` | `cli` | Same script with a custom `ui/index.html` using `window.homemade` |
 | `hello-worker/` | `rpc_worker` | Warm Python worker via `homemade_worker` (`@expose`, `progress`, `artifact`, `metric`) |
 | `no-manifest/` | (inferred) | Bare argparse script with no `homemade.toml`; Homemade infers inputs |
+| `webapp-app/` | `webapp` | Local HTTP server that prints `@homemade:port <n>`; Homemade embeds `http://127.0.0.1:<n>` (no bridge). Also shows the `max_ram_mb` advisory badge |
 
 ## hello-cli
 Inputs: `name` (string, `--name`), `count` (int 1-20, `--count`), `shout` (bool, `--shout`), and an optional positional `input_file`.
@@ -25,3 +26,6 @@ Manual check: `printf '{"id":"1","method":"add","params":{"a":2,"b":3}}\n' | pyt
 
 ## no-manifest
 `greet.py` has no `homemade.toml`. On import Homemade should infer: positional `folder` (directory), `--pattern` (string, default `*.png`), `--limit` (int), `--scale` (float), `--mode` (select: fast/accurate), and `--verbose` (bool). You can save the inferred manifest from the app's settings. Running it lists matching files.
+
+## webapp-app
+`mode = "webapp"`: `serve.py` binds a random port on 127.0.0.1 and prints `@homemade:port <n>`. The panel shows a placeholder until the port is announced, then embeds the page in a plain iframe (the `window.homemade` bridge is not injected in this mode). Stop tears the server down and the placeholder returns. `[resources] max_ram_mb = 512` renders as a header badge; on macOS it is marked advisory, on Linux it is enforced with `RLIMIT_AS`.

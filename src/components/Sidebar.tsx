@@ -8,6 +8,8 @@ import { useDropTarget, setFallbackDrop } from "../lib/dropRouter";
 import { errMsg, fmtBytes, isActive } from "../lib/format";
 import { Badge, Btn, Dropdown, MenuItem } from "./ui";
 
+/** Spec §8B: badge only when the unmanaged venv exceeds 50 MB. */
+export const VENV_BADGE_MIN_BYTES = 50 * 1024 * 1024;
 const modeLabel: Record<string, string> = { cli: "CLI", rpc_worker: "Worker", webapp: "Web" };
 
 async function importPaths(paths: string[]) {
@@ -89,7 +91,7 @@ function AppRow({ app }: { app: AppRecord }) {
         <span className={`min-w-0 flex-1 truncate ${selected ? "text-accent" : ""}`}>{app.name}</span>
         <Badge>{modeLabel[app.executionMode] ?? app.executionMode}</Badge>
       </div>
-      {app.unmanagedVenvBytes > 0 && (
+      {app.unmanagedVenvBytes > VENV_BADGE_MIN_BYTES && (
         <div className="ml-3.5 mt-1">
           <Btn data-testid="venv-dedupe" className="!px-1.5 !py-0 !text-[10px] text-amber-400" disabled={migrating} onClick={dedupe} title="Move this app's venv into the shared store">
             {fmtBytes(app.unmanagedVenvBytes)} · {migrating ? "Deduplicating…" : "Deduplicate"}

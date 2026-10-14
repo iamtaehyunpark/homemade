@@ -30,6 +30,7 @@ export function useTauriEvents() {
         }
       }),
       on<QueuedJobInfo>(events.runQueued, (q) => st().setQueued(q)),
+      on<{ runId: string; port: number }>(events.runPort, (p) => st().setPort(p.runId, p.port)),
       on<RunLineEvent>(events.runStdout, (p) => pushLine(p.runId, { err: false, text: p.line })),
       on<RunLineEvent>(events.runStderr, (p) => pushLine(p.runId, { err: true, text: p.line })),
       on<RunProgressEvent>(events.runProgress, (p) => useLive.getState().setProgress(p.runId, p.percent, p.message)),

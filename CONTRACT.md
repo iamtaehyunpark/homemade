@@ -121,3 +121,10 @@ RPC request written to worker stdin (A): `{"id":"<uuid>","method":"name","params
 - Log ring: lines from stderr are stored with a `[stderr] ` prefix (frontend strips + colors); directive lines are NOT stored in the ring/log_tail.
 - `storage_refs`: after each run, every top-level directory under `~/.homemade/store/shared_cache/*/` that was modified during the run (mtime >= run start) is upserted with its size for that app.
 - `--mcp` flag: `main.rs` dispatches to `integrations::mcp_server::run_stdio()` before Tauri starts.
+
+## Gap-closing pass (2026-10-14, round 3)
+- `mode = "webapp"` UI: `run://port` is stored in `useStore.ports[runId]`; `AppPanel` renders `WebappFrame` (`data-testid="webapp-frame"`, `data-port`) with an iframe at `http://127.0.0.1:<port>/` while the run is active. No bridge injection.
+- Venv badge threshold: Sidebar shows `venv-dedupe` only when `unmanagedVenvBytes > 50 MB` (`VENV_BADGE_MIN_BYTES`).
+- `max_ram_mb`: header badge `data-testid="ram-limit"`, labelled "(advisory)" on macOS.
+- `venv_scanner::scan_unmanaged_venv` returns 0 for a *managed* venv: one carrying the `.venv/.homemade-managed` marker (written by `migrate_venv`), or a uv-created venv whose `lib/` files are mostly hardlinked (`st_nlink > 1`).
+- Test API: `openApp` refreshes the app row from the backend before opening.

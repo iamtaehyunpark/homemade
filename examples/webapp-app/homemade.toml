@@ -1,0 +1,10 @@
+[app]
+id = "webapp-app"
+name = "Webapp App"
+mode = "webapp"
+exec = "python3 serve.py"
+env_manager = "system"
+[resources]
+max_ram_mb = 512
+graceful_timeout_ms = 500
+kill_timeout_ms = 500

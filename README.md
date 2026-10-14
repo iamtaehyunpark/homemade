@@ -10,7 +10,7 @@ pnpm install
 pnpm tauri dev
 ```
 
-Then drop a folder (or a `.py` file) onto the sidebar, or use **Import app…**. Try `examples/hello-cli`, `examples/hello-ui`, `examples/hello-worker`, `examples/no-manifest`.
+Then drop a folder (or a `.py` file) onto the sidebar, or use **Import app…**. Try `examples/hello-cli`, `examples/hello-ui`, `examples/hello-worker`, `examples/no-manifest`, `examples/webapp-app`.
 
 ## Headless smoke test
 

@@ -9,10 +9,12 @@ import { defaultValues, validate } from "../lib/form";
 import { Badge, Btn, Dropdown, MenuItem, Modal, PromptModal } from "./ui";
 import AutoForm from "./AutoForm";
 import AppSandbox from "./AppSandbox";
+import WebappFrame from "./WebappFrame";
 import GitBar from "./GitBar";
 import LogConsole from "./LogConsole";
 import OutputShelf from "./OutputShelf";
 
+const isMac = navigator.platform.toLowerCase().includes("mac");
 const agentId = (appId: string) => `agent:${appId}`;
 
 /** `api`/`containerApi` are absent when rendered standalone in its own window (default_layout = "window"). */
@@ -22,6 +24,7 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
   const queuedTick = useStore((s) => s.resources?.queue.find((q) => q.runId === run?.id));
   const queuedEv = useStore((s) => (run ? s.queued[run.id] : undefined));
   const queued = queuedEv ?? queuedTick;
+  const port = useStore((s) => (run ? s.ports[run.id] : undefined));
   const notify = useStore((s) => s.notify);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [touched, setTouched] = useState(false);
@@ -80,6 +83,9 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
         <h1 className="mr-1 truncate text-[14px] font-semibold" title={app.rootDir}>{app.name}</h1>
         <Badge color="accent">{app.executionMode.replace("_", " ")}</Badge>
         {manifest.resources.requires_gpu && <Badge color="amber">GPU</Badge>}
+        {manifest.resources.max_ram_mb != null && (
+          <span data-testid="ram-limit"><Badge title={isMac ? "max_ram_mb is advisory on macOS (not enforced)" : "Enforced via RLIMIT_AS"}>RAM ≤ {fmtMb(manifest.resources.max_ram_mb)}{isMac ? " (advisory)" : ""}</Badge></span>
+        )}
         <div className="flex-1" />
         <Dropdown testid="preset-select" label="Presets" align="right">
           {(close) => (<>
@@ -114,7 +120,9 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col">
-        {app.hasCustomUi
+        {app.executionMode === "webapp"
+          ? <div className="min-h-0 flex-1"><WebappFrame app={app} run={run ?? undefined} port={active ? port : undefined} /></div>
+          : app.hasCustomUi
           ? <div className="min-h-0 flex-1"><AppSandbox app={app} /></div>
           : <div className="min-h-0 flex-1 overflow-y-auto"><AutoForm manifest={manifest} values={values} onChange={setValues} errors={touched ? errors : {}} /></div>}
         <RunHistory appId={appId} latest={run} selected={viewRunId ?? run?.id ?? null} onSelect={(r) => setViewRunId(r.id === run?.id ? null : r.id)} />

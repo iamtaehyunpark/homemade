@@ -17,8 +17,40 @@ fn physical_size(path: &Path) -> u64 {
         .map(|m| m.blocks() * 512).sum()
 }
 
-/// Physical bytes of `<root>/.venv` or `<root>/venv` (0 if none). Count st_blocks*512, dedupe by inode.
+/// Marker written after a successful migration so the venv is recognised as store-backed.
+const MANAGED_MARKER: &str = ".homemade-managed";
+
+/// A venv counts as *managed* (already deduplicated against the shared store) when it carries the
+/// migration marker, or when its `pyvenv.cfg` says it was created by uv and its site-packages files
+/// are predominantly hardlinked (`st_nlink > 1`) into the uv cache. APFS clones cannot be told apart
+/// from plain copies via stat, which is why migration leaves the marker.
+fn is_managed_venv(venv: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    if venv.join(MANAGED_MARKER).exists() { return true; }
+    let cfg = std::fs::read_to_string(venv.join("pyvenv.cfg")).unwrap_or_default();
+    let by_uv = cfg.lines().any(|l| l.trim_start().starts_with("uv ="));
+    if !by_uv { return false; }
+    let (mut linked, mut total) = (0u64, 0u64);
+    for e in walkdir::WalkDir::new(venv.join("lib")).follow_links(false).into_iter().filter_map(|e| e.ok()) {
+        let Ok(m) = e.metadata() else { continue };
+        if m.is_dir() { continue; }
+        total += 1;
+        if m.nlink() > 1 { linked += 1; }
+    }
+    total > 0 && linked * 2 >= total
+}
+
+/// Physical bytes of an **unmanaged** `<root>/.venv` or `<root>/venv` (0 if none or already managed).
+/// Counts st_blocks*512, deduped by inode so hardlinked files count once.
 pub fn scan_unmanaged_venv(root: &Path) -> u64 {
+    match find_venv(root) {
+        Some(v) if !is_managed_venv(&v) => physical_size(&v),
+        _ => 0,
+    }
+}
+
+/// Physical bytes of the venv regardless of managed status (reported after migration).
+fn venv_physical_size(root: &Path) -> u64 {
     find_venv(root).map(|v| physical_size(&v)).unwrap_or(0)
 }
 
@@ -94,7 +126,8 @@ pub async fn migrate_venv(root: &Path, homemade_home: &Path, app_id: &str, state
     let pystr = venv.join("bin/python").to_string_lossy().into_owned();
     run_logged(state, app_id, root, &env, &uv, &["pip", "install", "--python", &pystr, "-r", &req], None).await?;
 
-    let bytes = scan_unmanaged_venv(root);
+    let _ = std::fs::write(venv.join(MANAGED_MARKER), "built by homemade migrate_venv from the shared uv store\n");
+    let bytes = venv_physical_size(root);
     progress(&format!("Done. {venv_name} now uses {} MB on disk.", bytes / (1024 * 1024)));
     Ok(bytes)
 }

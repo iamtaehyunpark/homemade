@@ -18,7 +18,7 @@ await R("start " + new Date().toISOString() + " __hm keys: " + Object.keys(H).jo
 const apps = {};
 
 await t("import apps (manifest + inference)", async () => {
-  for (const n of ["hello-cli", "hello-ui", "hello-worker", "no-manifest", "gpu-app", "env-app", "venv-app"]) {
+  for (const n of ["hello-cli", "hello-ui", "hello-worker", "no-manifest", "gpu-app", "env-app", "venv-app", "webapp-app"]) {
     apps[n] = await H.ipc.importApp(F + "/" + n);
     ok(apps[n].id, "no id for " + n);
   }
@@ -27,7 +27,7 @@ await t("import apps (manifest + inference)", async () => {
   ok(nm.manifest.inputs.pattern && nm.manifest.inputs.pattern.default === "*.png", "inferred default wrong");
   ok(apps["hello-ui"].hasCustomUi, "hello-ui should have custom UI");
   const list = await H.ipc.listApps();
-  ok(list.length >= 7, "listApps count " + list.length);
+  ok(list.length >= 8, "listApps count " + list.length);
   await R("  app ids: " + list.map((a) => a.id).join(","));
 });
 
@@ -158,14 +158,36 @@ await t("env-app: secrets vault, redaction, alias expansion, args input, stderr 
 await t("venv-app: unmanaged venv scan + dedupe migration + run", async () => {
   const a = apps["venv-app"];
   const bytes = await H.ipc.scanVenv(a.id);
-  ok(bytes > 1_000_000, "scan bytes " + bytes);
+  ok(bytes > 50 * 1024 * 1024, "scan bytes " + bytes + " (fixture must exceed the 50 MB badge threshold)");
   await H.openApp(a.id);
   ok(q('[data-testid="venv-dedupe"]'), "no dedupe badge");
   const after = await H.ipc.migrateVenv(a.id);
   await R("  venv before=" + bytes + " after=" + after);
+  const rescan = await H.ipc.scanVenv(a.id);
+  ok(rescan === 0, "migrated venv should scan as managed (0), got " + rescan);
+  H.store.getState().upsertApp(await H.ipc.getApp(a.id)); // what the Sidebar's Deduplicate button does after migrating
+  await H.waitFor(() => !q('[data-testid="venv-dedupe"]'), 5000);
   const run = await H.ipc.startRun(a.id, {});
   const fin = await waitRun(run.id, ["success", "failed", "killed"], 60000);
   ok(fin.status === "success" && fin.logTail.includes("six ok"), "post-migration run: " + fin.status + " " + fin.logTail);
+});
+
+await t("webapp-app: mode=webapp embeds http://127.0.0.1:<port> from @homemade:port; RAM advisory badge", async () => {
+  const a = apps["webapp-app"];
+  await H.openApp(a.id);
+  ok(q('[data-testid="ram-limit"]'), "ram-limit badge missing");
+  ok(q('[data-testid="webapp-frame"]'), "webapp frame placeholder missing");
+  const run = await H.ipc.startRun(a.id, {});
+  const el = await H.waitFor(() => { const f = q('[data-testid="webapp-frame"]'); return f && f.dataset.port ? f : null; }, 15000);
+  const port = Number(el.dataset.port);
+  ok(port > 0, "port not announced");
+  const fr = q('[data-testid="webapp-frame"] iframe');
+  ok(fr && fr.src === "http://127.0.0.1:" + port + "/", "iframe src " + (fr && fr.src));
+  await R("  webapp port=" + port);
+  await H.ipc.stopRun(run.id);
+  const fin = await waitRun(run.id, ["killed", "success", "failed"], 15000);
+  ok(fin.status === "killed", "webapp stop status " + fin.status);
+  await H.waitFor(() => { const f = q('[data-testid="webapp-frame"]'); return f && !f.dataset.port; }, 5000);
 });
 
 await t("git: init, checkpoint, log, revert", async () => {
