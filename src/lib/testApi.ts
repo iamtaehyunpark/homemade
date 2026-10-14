@@ -38,7 +38,8 @@ function setInput(sel: string, value: unknown) {
 
 async function openApp(appId: string): Promise<void> {
   const st = useStore.getState();
-  if (!st.apps.some((a) => a.id === appId)) await waitFor(() => useStore.getState().apps.some((a) => a.id === appId), 10000);
+  if (!st.apps.some((a) => a.id === appId)) { st.setApps(await ipc.listApps()); }
+  await waitFor(() => useStore.getState().apps.some((a) => a.id === appId), 10000);
   const app = useStore.getState().apps.find((a) => a.id === appId);
   useStore.getState().openApp(appId);
   if (app?.manifest.ui.default_layout === "window") return; // lives in its own webview window

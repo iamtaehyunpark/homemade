@@ -78,19 +78,22 @@ pub fn run() {
                 });
             }
 
-            // E2E harness: HOMEMADE_E2E=<script.js> is evaluated inside the main webview after load.
+            // E2E harness: HOMEMADE_E2E=<script.js> is evaluated inside the main webview once window.__hm exists.
             if let Ok(script_path) = std::env::var("HOMEMADE_E2E") {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-                    match std::fs::read_to_string(&script_path) {
-                        Ok(js) => {
-                            if let Some(w) = handle.get_webview_window("main") {
-                                let wrapped = format!("(async () => {{ try {{ {js} }} catch (e) {{ await window.__hm.report('SCRIPT ERROR: ' + (e && e.stack || e)); await window.__hm.done(9); }} }})();");
-                                if let Err(e) = w.eval(&wrapped) { eprintln!("[e2e] eval failed: {e}"); handle.exit(8); }
-                            }
+                    let js = match std::fs::read_to_string(&script_path) {
+                        Ok(s) => s,
+                        Err(e) => { eprintln!("[e2e] cannot read script: {e}"); handle.exit(8); return; }
+                    };
+                    let wrapped = format!(
+                        "if (window.__hm && !window.__e2e_started) {{ window.__e2e_started = true; (async () => {{ try {{ {js} }} catch (e) {{ await window.__hm.report('SCRIPT ERROR: ' + (e && e.stack || e)); await window.__hm.done(9); }} }})(); }}"
+                    );
+                    for i in 0..120 {
+                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                        if let Some(w) = handle.get_webview_window("main") {
+                            if let Err(e) = w.eval(&wrapped) { eprintln!("[e2e] eval failed ({i}): {e}"); }
                         }
-                        Err(e) => { eprintln!("[e2e] cannot read script: {e}"); handle.exit(8); }
                     }
                 });
             }
