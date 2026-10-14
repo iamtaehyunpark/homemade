@@ -45,6 +45,9 @@ shell-words = "1"
 dirs = "5"
 http = "1"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 nvml-wrapper = "0.10"
 

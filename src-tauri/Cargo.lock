@@ -1687,6 +1687,7 @@ dependencies = [
  "nix 0.29.0",
  "notify",
  "nvml-wrapper",
+ "objc2",
  "percent-encoding",
  "portable-pty",
  "rusqlite",

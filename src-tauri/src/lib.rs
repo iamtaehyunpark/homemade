@@ -3,6 +3,8 @@ pub mod db;
 pub mod error;
 pub mod integrations;
 pub mod intelligence;
+#[cfg(target_os = "macos")]
+pub mod macos_quit;
 pub mod manifest;
 pub mod protocols;
 pub mod state;
@@ -36,6 +38,8 @@ pub fn run() {
                 app_handle: app.handle().clone(),
             });
             app.manage(state.clone());
+            #[cfg(target_os = "macos")]
+            macos_quit::install(state.clone());
 
             // Reap anything a previous session left running (e.g. after a crash or a forced quit), then tell the UI.
             {
