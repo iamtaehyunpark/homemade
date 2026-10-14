@@ -101,6 +101,7 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
             <MenuItem testid="preset-save" onClick={() => { close(); setSavingPreset(true); }}>Save preset…</MenuItem>
           </>)}
         </Dropdown>
+        <Btn data-testid="draft-manifest" onClick={() => useStore.getState().setDraftPath(app.rootDir)} title="Draft a homemade.toml with the local model">✨ Draft manifest</Btn>
         <Btn data-testid="copy-cli" onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</Btn>
         {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""}>Edit with Agent</Btn>}
         <Btn data-testid="remove-app" variant="ghost" title="Remove app from Homemade" onClick={() => setRemoving(true)}>Remove</Btn>

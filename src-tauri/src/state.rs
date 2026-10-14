@@ -18,6 +18,10 @@ pub struct AppState {
     pub vram_queue: Mutex<VecDeque<PendingJob>>,
     pub resources: std::sync::Mutex<crate::types::ResourceSnapshot>,
     pub app_handle: tauri::AppHandle,
+    /// Apple on-device model helper (spawned on demand).
+    pub model: Arc<crate::intelligence::local_model::LocalModel>,
+    /// Spec §12 assistor (Apple-backed or rule-based no-op).
+    pub assistor: Arc<dyn crate::intelligence::traits::SemanticAssistor>,
 }
 
 /// A run that has been admitted and spawned. Owned by supervisor (agent A may add fields).

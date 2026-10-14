@@ -1,4 +1,4 @@
-//! `homemade --mcp`: stdio MCP server, read-only DB (spec §10D). OWNER: agent G2.
+//! `homemade --mcp`: stdio MCP server, read-only DB (spec §10D) + draft_manifest (local model). OWNER: agent G2.
 //! Newline-delimited JSON-RPC 2.0 on stdin/stdout. Nothing but responses is written to stdout.
 use crate::db::queries;
 use crate::error::Result;
@@ -9,6 +9,18 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
+
+/// Resources dir + local model for the CLI process (built lazily on the first draft_manifest call).
+static MODEL: std::sync::OnceLock<(PathBuf, crate::intelligence::local_model::LocalModel)> = std::sync::OnceLock::new();
+
+fn model() -> &'static (PathBuf, crate::intelligence::local_model::LocalModel) {
+    MODEL.get_or_init(|| {
+        let res = crate::commands::resources_dir_from_exe();
+        let cfg = dirs::home_dir().map(|h| crate::storage::config::load(&h.join(".homemade"))).unwrap_or_default();
+        let m = crate::intelligence::local_model::LocalModel::new(&res, &cfg);
+        (res, m)
+    })
+}
 
 fn db_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".homemade").join("state.db"))
@@ -97,6 +109,8 @@ fn tool_defs() -> Value {
           "inputSchema": s(json!({ "app_id": { "type": "string" } }), &["app_id"]) },
         { "name": "list_artifacts", "description": "List artifact files produced by an app (optionally for one run).",
           "inputSchema": s(json!({ "app_id": { "type": "string" }, "run_id": { "type": "string" } }), &["app_id"]) },
+        { "name": "draft_manifest", "description": "Draft a homemade.toml for a project folder (reads README/docs/entry scripts; uses Apple's on-device model when available, else deterministic inference). Does not write anything. Returns {toml, agentPrompt, factsSummary, validationErrors, usedModel, notes}.",
+          "inputSchema": s(json!({ "path": { "type": "string", "description": "absolute path of the project folder" } }), &["path"]) },
         { "name": "validate_manifest", "description": "Validate homemade.toml text against Homemade's schema. Returns {ok, errors[], normalized_toml}.",
           "inputSchema": s(json!({ "toml_text": { "type": "string" } }), &["toml_text"]) },
     ])
@@ -176,6 +190,14 @@ fn call_tool(name: &str, args: &Value, db: &mut Option<Connection>) -> std::resu
                 }
                 Err(err) => json!({ "ok": false, "errors": [err.to_string()], "normalized_toml": Value::Null }),
             })
+        }
+        "draft_manifest" => {
+            let p = str_arg(args, "path")?;
+            let root = PathBuf::from(p).canonicalize().map_err(|x| format!("cannot open {p}: {x}"))?;
+            let root = if root.is_file() { root.parent().map(Path::to_path_buf).unwrap_or(root) } else { root };
+            let (res, m) = model();
+            let d = tauri::async_runtime::block_on(crate::intelligence::draft::draft_manifest(m, &root, res)).map_err(e)?;
+            serde_json::to_value(&d).map_err(|x| x.to_string())
         }
         other => Err(format!("unknown tool: {other}")),
     }

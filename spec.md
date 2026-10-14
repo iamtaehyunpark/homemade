@@ -877,6 +877,8 @@ Inside the Python script, print `@homemade:` directives to `stdout` (with `flush
 
 ## 12. Phase 2 Extension Trait: Embedded Tiny Model (`intelligence/traits.rs`)
 
+> **Implemented (2026-10-14) with Apple's on-device Foundation Model.** On macOS 26+ Homemade talks to the OS-resident model (the one behind Apple Intelligence) through a 60 KB Swift helper (`homemade-fm`, JSON Lines over stdio), so there is nothing to download and no memory cost while idle. The first user-facing feature is **manifest drafting**: Homemade reads the repo's README and docs, pyproject/package.json, entry scripts and their CLI definitions, and asks the model for a `homemade.toml`, validated against the schema, plus a self-contained *agent prompt* that any coding agent (Claude Code, Codex, `agy`) can take to finish the adaptation. All three trait methods are wired: failed-run explanation, schema inference for scripts without argparse, and one-line agent-session summaries. On Linux / older macOS the `RuleBasedOnlyAssistor` no-op remains. Details: CONTRACT.md "Local model".
+
 To keep v1 100% deterministic while making the Phase 2 local 0.5B–1.5B SLM (`llama.cpp` / ONNX) a drop-in module later, define this trait boundary in Rust during v1:
 
 ```rust

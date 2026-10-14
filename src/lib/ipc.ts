@@ -62,6 +62,12 @@ export const ipc = {
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
   homemadeHome: () => invoke<string>("homemade_home"),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
+  // local model
+  modelStatus: () => invoke<T.ModelStatus>("model_status"),
+  draftManifest: (path: string) => invoke<T.DraftResult>("draft_manifest", { path }),
+  applyManifest: (path: string, toml: string) => invoke<T.AppRecord>("apply_manifest", { path, toml }),
+  explainRun: (runId: string) => invoke<T.HealthReport>("explain_run", { runId }),
+  modelComplete: (system: string, prompt: string) => invoke<string>("model_complete", { system, prompt }),
   // e2e harness
   e2eReport: (msg: string) => invoke<void>("e2e_report", { msg }),
   e2eDone: (code: number) => invoke<void>("e2e_done", { code }),
@@ -70,7 +76,8 @@ export const ipc = {
 export const events = {
   runStdout: "run://stdout", runStderr: "run://stderr", runProgress: "run://progress", runMetric: "run://metric",
   runArtifact: "run://artifact", runPort: "run://port", runWebappReady: "run://webapp_ready", runStatus: "run://status", runQueued: "run://queued", runWorkerReady: "run://worker_ready",
-  ptyData: "pty://data", ptyExit: "pty://exit",
+  ptyData: "pty://data", ptyExit: "pty://exit", ptySessionSummary: "pty://session_summary",
+  runHealth: "run://health", modelStatus: "model://status",
   appChanged: "app://changed", appUiReload: "app://ui_reload", confirmExit: "app://confirm-exit", notice: "app://notice",
   resourcesTick: "resources://tick", storageProgress: "storage://progress",
 } as const;

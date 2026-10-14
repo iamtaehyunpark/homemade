@@ -78,7 +78,7 @@ pub fn load_or_infer(root: &Path, resources_dir: &Path) -> Result<(HomemadeManif
     Ok((m, hash, true))
 }
 
-fn find_entry_script(root: &Path) -> Option<PathBuf> {
+pub fn find_entry_script(root: &Path) -> Option<PathBuf> {
     for n in ["main.py", "app.py", "cli.py", "__main__.py"] {
         let p = root.join(n);
         if p.is_file() { return Some(p); }
@@ -90,7 +90,7 @@ fn find_entry_script(root: &Path) -> Option<PathBuf> {
     if pys.len() == 1 { pys.into_iter().next() } else { None }
 }
 
-fn run_inspector(script: &Path, resources_dir: &Path) -> Option<IndexMap<String, InputFieldSpec>> {
+pub fn run_inspector(script: &Path, resources_dir: &Path) -> Option<IndexMap<String, InputFieldSpec>> {
     use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
     let inspector = resources_dir.join("ast_inspector.py");
@@ -121,7 +121,7 @@ pub fn slugify(s: &str) -> String {
     if t.is_empty() { "app".into() } else { t }
 }
 
-fn title_case(s: &str) -> String {
+pub fn title_case(s: &str) -> String {
     s.split(|c: char| c == '-' || c == '_' || c.is_whitespace()).filter(|w| !w.is_empty())
         .map(|w| { let mut c = w.chars(); match c.next() { Some(f) => f.to_uppercase().collect::<String>() + c.as_str(), None => String::new() } })
         .collect::<Vec<_>>().join(" ")

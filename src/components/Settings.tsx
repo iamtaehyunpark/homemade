@@ -76,6 +76,8 @@ export default function Settings() {
           ) : <div className="text-gray-500">Loading…</div>}
         </Section>
 
+        <ModelSection />
+
         <Section title="Coding agents">
           <div className="mb-3 space-y-1">
             {agents === null && <div className="text-gray-500">Detecting…</div>}
@@ -91,5 +93,45 @@ export default function Settings() {
         </Section>
       </div>
     </div>
+  );
+}
+
+function ModelSection() {
+  const status = useStore((s) => s.modelStatus);
+  const setStatus = useStore((s) => s.setModelStatus);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const refresh = () => ipc.modelStatus().then(setStatus).catch(() => {});
+  useEffect(() => { refresh(); }, []);
+  const test = async () => {
+    setTesting(true); setResult(null);
+    const t0 = performance.now();
+    try {
+      const out = await ipc.modelComplete("You are a terse assistant.", "Reply with the single word: ok");
+      setResult({ ok: true, text: `${Math.round(performance.now() - t0)} ms · ${out.trim().slice(0, 80)}` });
+    } catch (e) { setResult({ ok: false, text: errMsg(e) }); }
+    setTesting(false);
+  };
+  return (
+    <Section title="Local model" action={<Btn variant="ghost" onClick={refresh}>Refresh</Btn>}>
+      <div data-testid="settings-model" data-available={status ? String(status.available) : ""}>
+        {status ? (
+          <dl className="grid grid-cols-[180px_1fr] gap-y-1 text-[12px]">
+            <dt className="text-gray-500">Provider</dt><dd>{status.provider === "apple" ? "Apple on-device Foundation Model" : status.provider}</dd>
+            <dt className="text-gray-500">Availability</dt>
+            <dd className={status.available ? "text-emerald-400" : "text-amber-400"}>{status.available ? "Available" : "Unavailable"}</dd>
+            {status.reason && (<>
+              <dt className="text-gray-500">Reason</dt>
+              <dd>{status.reason}{status.reason === "appleIntelligenceNotEnabled" && <span className="ml-2 text-gray-400">— Enable Apple Intelligence in System Settings</span>}</dd>
+            </>)}
+            <dt className="text-gray-500">Helper</dt><dd className="truncate font-mono" title={status.helperPath ?? ""}>{status.helperPath ?? "—"}</dd>
+          </dl>
+        ) : <div className="text-gray-500">Checking…</div>}
+        <div className="mt-3 flex items-center gap-3">
+          <Btn data-testid="model-test" disabled={testing} onClick={test}>{testing ? "Testing…" : "Test"}</Btn>
+          {result && <span data-testid="model-test-result" data-ok={String(result.ok)} className={`truncate text-[12px] ${result.ok ? "text-emerald-400" : "text-red-400"}`}>{result.text}</span>}
+        </div>
+      </div>
+    </Section>
   );
 }

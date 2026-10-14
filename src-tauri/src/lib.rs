@@ -27,6 +27,9 @@ pub fn run() {
             storage::env_router::ensure_layout(&home)?;
             let conn = db::open(&home.join("state.db"))?;
             let login_env = supervisor::spawner::load_user_login_env();
+            let res_dir = commands::resources_dir(app.handle());
+            let model = Arc::new(intelligence::local_model::LocalModel::new(&res_dir, &storage::config::load(&home)));
+            let assistor = intelligence::assistor::make(model.clone());
             let state = Arc::new(AppState {
                 db: std::sync::Mutex::new(conn),
                 home: home.clone(),
@@ -36,6 +39,8 @@ pub fn run() {
                 vram_queue: tokio::sync::Mutex::new(std::collections::VecDeque::new()),
                 resources: std::sync::Mutex::new(types::ResourceSnapshot::default()),
                 app_handle: app.handle().clone(),
+                model,
+                assistor,
             });
             app.manage(state.clone());
             #[cfg(target_os = "macos")]
@@ -63,7 +68,15 @@ pub fn run() {
                 let rows = { let c = state.db.lock().unwrap(); db::queries::list_apps(&c).unwrap_or_default() };
                 for r in rows { manifest::watcher::watch_app(state.clone(), r.id.clone(), std::path::PathBuf::from(r.root_dir)); }
             }
-            let res_dir = commands::resources_dir(app.handle());
+            // Local model availability, once, in the background (model://status).
+            {
+                let st = state.clone();
+                tauri::async_runtime::spawn(async move {
+                    let s = st.model.status().await;
+                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await; // let the webview subscribe
+                    st.emit("model://status", serde_json::json!({ "available": s.available, "reason": s.reason }));
+                });
+            }
             let _ = integrations::skill::install(&res_dir, &home);
 
             // Headless smoke hook: HOMEMADE_SMOKE=<app_id> [HOMEMADE_SMOKE_INPUTS='{"name":"x"}'] runs one job and exits.
@@ -152,6 +165,7 @@ pub fn run() {
             commands::agents::detect_agents, commands::agents::list_agent_sessions, commands::agents::install_skill,
             commands::git::git_status, commands::git::git_init, commands::git::git_checkpoint, commands::git::git_revert_to,
             commands::system::active_count, commands::system::confirm_quit, commands::system::list_listening_ports, commands::system::kill_port_owner, commands::system::reveal_in_finder, commands::system::homemade_home, commands::system::read_text_file, commands::system::e2e_report, commands::system::e2e_done,
+            commands::model::model_status, commands::model::draft_manifest, commands::model::apply_manifest, commands::model::explain_run, commands::model::model_complete,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Homemade")

@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 /** Ticks kept for the Monitor graphs (1 Hz → 5 minutes). */
 export const HISTORY_TICKS = 300;
-import type { AppRecord, RunRecord, ResourceSnapshot, QueuedJobInfo } from "../lib/types";
+import type { AppRecord, RunRecord, ResourceSnapshot, QueuedJobInfo, ModelStatus, HealthReport } from "../lib/types";
 
 interface HomemadeStore {
   apps: AppRecord[];
@@ -19,6 +19,14 @@ interface HomemadeStore {
   queued: Record<string, QueuedJobInfo>; // by run id, from run://queued
   ports: Record<string, number>; // by run id, from run://port (webapp mode)
   webappReady: Record<string, boolean>; // by run id, from run://webapp_ready (port accepts connections)
+  modelStatus: ModelStatus | null;
+  health: Record<string, HealthReport>; // by run id, from run://health or explain_run
+  draftPath: string | null; // non-null → DraftManifestModal open for this folder
+  sessionSummaryTick: number; // bumped on pty://session_summary
+  setModelStatus: (m: ModelStatus | null) => void;
+  setHealth: (runId: string, h: HealthReport) => void;
+  setDraftPath: (p: string | null) => void;
+  bumpSessionSummary: () => void;
   setApps: (apps: AppRecord[]) => void;
   upsertApp: (app: AppRecord) => void;
   removeApp: (appId: string) => void;
@@ -50,6 +58,14 @@ export const useStore = create<HomemadeStore>((set) => ({
   queued: {},
   ports: {},
   webappReady: {},
+  modelStatus: null,
+  health: {},
+  draftPath: null,
+  sessionSummaryTick: 0,
+  setModelStatus: (modelStatus) => set({ modelStatus }),
+  setHealth: (runId, h) => set((s) => ({ health: { ...s.health, [runId]: h } })),
+  setDraftPath: (draftPath) => set({ draftPath }),
+  bumpSessionSummary: () => set((s) => ({ sessionSummaryTick: s.sessionSummaryTick + 1 })),
   setApps: (apps) => set({ apps }),
   upsertApp: (app) => set((s) => {
     const i = s.apps.findIndex((a) => a.id === app.id);

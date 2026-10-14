@@ -49,6 +49,12 @@ export interface DetectedAgent { agentType: AgentType; binaryPath: string; displ
 export interface PtyInfo { ptyId: string; appId: string; agentType: AgentType; sessionId: string | null }
 export interface StorageSummary { storeRoot: string; uvCacheBytes: number; pnpmStoreBytes: number; sharedCacheBytes: number; unmanagedVenvTotalBytes: number }
 
+// Local model (Phase 2)
+export interface ModelStatus { provider: string; available: boolean; reason: string | null; helperPath: string | null }
+export interface DraftResult { toml: string; agentPrompt: string; factsSummary: string; validationErrors: string[]; usedModel: boolean; notes: string[] }
+export type HealthSeverity = "info" | "warn" | "error";
+export interface HealthReport { severity: HealthSeverity; message: string }
+
 // Event payloads (names in CONTRACT.md)
 export interface RunLineEvent { runId: string; line: string }
 export interface RunProgressEvent { runId: string; percent: number; message: string }
@@ -56,3 +62,6 @@ export interface RunMetricEvent { runId: string; data: Record<string, unknown> }
 export interface RunPortEvent { runId: string; port: number }
 export interface PtyDataEvent { ptyId: string; data: string }
 export interface PtyExitEvent { ptyId: string; exitCode: number | null }
+export interface RunHealthEvent { runId: string; severity: HealthSeverity; message: string }
+export interface PtySessionSummaryEvent { sessionId: string; title: string }
+export interface ModelStatusEvent { available: boolean; reason: string | null }

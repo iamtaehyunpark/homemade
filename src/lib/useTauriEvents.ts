@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { ipc, on, events } from "./ipc";
-import type { QueuedJobInfo, ArtifactRecord, ResourceSnapshot, RunLineEvent, RunMetricEvent, RunProgressEvent, RunRecord } from "./types";
+import type { QueuedJobInfo, ArtifactRecord, ResourceSnapshot, RunLineEvent, RunMetricEvent, RunProgressEvent, RunRecord, RunHealthEvent, PtySessionSummaryEvent, ModelStatusEvent } from "./types";
 import { useStore } from "../state/store";
 import { useLive, type LogLine } from "../state/live";
 import { isTerminal } from "./format";
@@ -42,12 +42,19 @@ export function useTauriEvents() {
       on<number>(events.confirmExit, (n) => st().setConfirmExit(n)),
       on<{ appId: string; message: string }>(events.storageProgress, (p) => st().notify(p.message)),
       on<{ message: string }>(events.notice, (p) => st().notify(p.message)),
+      on<RunHealthEvent>(events.runHealth, (p) => st().setHealth(p.runId, { severity: p.severity, message: p.message })),
+      on<PtySessionSummaryEvent>(events.ptySessionSummary, () => st().bumpSessionSummary()),
+      on<ModelStatusEvent>(events.modelStatus, (p) => {
+        const cur = st().modelStatus;
+        st().setModelStatus({ provider: cur?.provider ?? "apple", helperPath: cur?.helperPath ?? null, available: p.available, reason: p.reason ?? null });
+      }),
     ];
     for (const s of subs) s.then((u) => (disposed ? u() : unlisten.push(u))).catch(() => {});
 
     ipc.listApps().then(st().setApps).catch((e) => console.error("listApps", e));
     ipc.listActiveRuns().then((rs) => rs.forEach(st().upsertRun)).catch(() => {});
     ipc.resourceSnapshot().then(st().setResources).catch(() => {});
+    ipc.modelStatus().then(st().setModelStatus).catch(() => {});
 
     return () => { disposed = true; unlisten.forEach((u) => u()); if (raf) cancelAnimationFrame(raf); };
   }, []);

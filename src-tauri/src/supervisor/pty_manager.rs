@@ -131,6 +131,7 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
     let log_dir = state.home.join("sessions").join(app_id);
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join(format!("{pty_id}.log"));
+    let log_path_w = log_path.clone();
 
     let info = PtyInfo { pty_id: pty_id.clone(), app_id: app_id.into(), agent_type: agent_type.into(), session_id: session_id.clone() };
     let active = Arc::new(ActivePty {
@@ -156,6 +157,7 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
         let pty_id = pty_id.clone();
         let agent_type = agent_type.to_string();
         let app_id = app_id.to_string();
+        let log_path_w = log_path_w.clone();
         std::thread::spawn(move || {
             let code = child.wait().map(|s| s.exit_code() as i64).unwrap_or(-1);
             state.active_ptys.remove(&pty_id);
@@ -185,19 +187,68 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
                     git_ops::head_sha(&root)
                 };
                 if let Some(id) = sid {
+                    let before = if resuming { None } else { head_before };
                     let rec = AgentSessionRecord {
-                        session_id: id, app_id, agent_type,
+                        session_id: id.clone(), app_id, agent_type,
                         title,
-                        git_commit_before: if resuming { None } else { head_before },
-                        git_commit_after: head_after, updated_at: now_ms(),
+                        git_commit_before: before.clone(),
+                        git_commit_after: head_after.clone(), updated_at: now_ms(),
                     };
                     if let Ok(c) = state.db.lock() { let _ = crate::db::queries::upsert_agent_session(&c, &rec); }
+                    spawn_session_summary(state.clone(), id, root.clone(), log_path_w.clone(), before, head_after);
                 }
             }
             state.emit("pty://exit", serde_json::json!({ "ptyId": pty_id, "exitCode": code }));
         });
     }
     Ok(info)
+}
+
+/// After an agent session that changed the repo: ask the assistor for a one-line title when the session has none yet.
+fn spawn_session_summary(state: Arc<AppState>, session_id: String, root: PathBuf, log_path: PathBuf, before: Option<String>, after: Option<String>) {
+    tauri::async_runtime::spawn(async move {
+        let current = {
+            let Ok(c) = state.db.lock() else { return };
+            c.query_row("SELECT title FROM agent_sessions WHERE session_id = ?1", rusqlite::params![session_id], |r| r.get::<_, Option<String>>(0)).ok().flatten()
+        };
+        if current.as_deref().map(|t| !t.trim().is_empty() && t != "New session").unwrap_or(false) { return; }
+        let git = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(&root).env("GIT_TERMINAL_PROMPT", "0").output().ok()
+            .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+        let diff = match (&before, &after) {
+            (Some(b), Some(a)) if b != a => git(&["diff", "--stat", &format!("{b}..{a}")]),
+            _ if git_ops::is_dirty(&root) => git(&["diff", "--stat", "HEAD"]),
+            _ => String::new(),
+        };
+        if diff.trim().is_empty() { return; }
+        let diff: String = diff.lines().take(60).collect::<Vec<_>>().join("\n");
+        let transcript = std::fs::read(&log_path).map(|b| strip_ansi(&String::from_utf8_lossy(&b))).unwrap_or_default();
+        let lines: Vec<&str> = transcript.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).collect();
+        let tail = lines[lines.len().saturating_sub(60)..].join("\n");
+        let Some(title) = state.assistor.summarize_agent_session(&diff, &tail).await else { return };
+        if let Ok(c) = state.db.lock() {
+            let _ = c.execute("UPDATE agent_sessions SET title = ?2 WHERE session_id = ?1", rusqlite::params![session_id, title]);
+        }
+        state.emit("pty://session_summary", serde_json::json!({ "sessionId": session_id, "title": title }));
+    });
+}
+
+/// Remove ANSI CSI/OSC escape sequences and carriage returns from a terminal transcript.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        match c {
+            '\x1b' => match it.next() {
+                Some('[') => { while let Some(&n) = it.peek() { it.next(); if ('@'..='~').contains(&n) { break; } } }
+                Some(']') => { while let Some(n) = it.next() { if n == '\x07' { break; } if n == '\x1b' { it.next(); break; } } }
+                _ => {}
+            },
+            '\r' => {}
+            c if c.is_control() && c != '\n' && c != '\t' => {}
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 fn agent_label(agent_type: &str) -> &str {

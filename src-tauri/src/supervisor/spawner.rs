@@ -294,7 +294,27 @@ async fn finalize(
     }
     state.active_runs.remove(&run.run_id);
     emit_status(&state, &run.run_id);
+    if final_status == "failed" { spawn_health_check(state.clone(), &run); }
     notify_scheduler(state).await;
+}
+
+/// Failed run: ask the assistor (local model) for a diagnosis in the background; never blocks the finish path.
+fn spawn_health_check(state: Arc<AppState>, run: &Arc<ActiveRun>) {
+    let lines: Vec<String> = {
+        let log = run.log.lock().unwrap();
+        log.iter().skip(log.len().saturating_sub(120)).map(|l| secrets::redact(l, &run.secrets)).collect()
+    };
+    let run_id = run.run_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(rep) = state.assistor.analyze_log_window(&lines).await else { return };
+        {
+            let c = state.db.lock().unwrap();
+            let _ = c.execute("UPDATE runs SET log_tail = COALESCE(log_tail, '') || ?2 WHERE id = ?1",
+                rusqlite::params![run_id, format!("\n[homemade] {}", rep.message)]);
+        }
+        state.emit("run://health", serde_json::json!({ "runId": run_id, "severity": rep.severity, "message": rep.message }));
+        emit_status(&state, &run_id);
+    });
 }
 
 /// Begin stopping an active run; returns the reaper future's inputs.

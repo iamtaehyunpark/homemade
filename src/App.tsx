@@ -11,6 +11,7 @@ import { startDropRouter } from "./lib/dropRouter";
 import { ipc } from "./lib/ipc";
 import { useStore } from "./state/store";
 import AppPanel from "./components/AppPanel";
+import DraftManifestModal from "./components/DraftManifestModal";
 
 const params = new URLSearchParams(window.location.search);
 const standaloneAppId = params.get("app");
@@ -29,6 +30,7 @@ function StandaloneApp({ appId }: { appId: string }) {
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1"><AppPanel appId={appId} /></div>
+      <DraftManifestModal />
       {toast && <div className="fixed bottom-3 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>}
     </div>
   );
@@ -64,6 +66,7 @@ function MainApp() {
         </main>
       </div>
       <ResourceBar />
+      <DraftManifestModal />
       {toast && (
         <div className="fixed bottom-9 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>
       )}

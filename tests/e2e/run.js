@@ -346,6 +346,59 @@ await t("listening ports: webapp run attributed to its run; stop via port table"
   H.click('[data-testid="monitor-nav"]');
 });
 
+await t("local model: status, settings section, test prompt", async () => {
+  const s = await H.ipc.modelStatus();
+  await R("  model status: " + JSON.stringify(s));
+  ok(s.provider === "apple" && s.available === true, "Apple model not available: " + JSON.stringify(s));
+  H.click('[data-testid="settings"]');
+  await H.waitFor(() => q('[data-testid="settings-model"]'), 5000);
+  H.click('[data-testid="model-test"]');
+  const res = await H.waitFor(() => { const el = q('[data-testid="model-test-result"]'); return el && el.textContent.trim().length > 3 ? el : null; }, 60000);
+  await R("  model test: " + res.textContent.trim().slice(0, 120));
+  ok(!/error/i.test(res.textContent), "model test errored: " + res.textContent);
+  H.click('[data-testid="settings"]');
+});
+
+await t("local model: draft manifest from README (no argparse), agent prompt, apply", async () => {
+  const d = await H.ipc.draftManifest(F + "/readme-app");
+  await R("  draft usedModel=" + d.usedModel + " errors=" + JSON.stringify(d.validationErrors) + " notes=" + JSON.stringify(d.notes));
+  await R("  draft toml:\n" + d.toml.split("\n").map((l) => "    " + l).join("\n"));
+  ok(d.usedModel === true, "draft did not use the model");
+  ok(d.validationErrors.length === 0, "draft has validation errors");
+  ok(/thumbs\.py/.test(d.toml), "exec does not reference thumbs.py");
+  ok(/\[inputs\./.test(d.toml) && /--src|--size/.test(d.toml), "inputs missing from draft (README documents --src/--size)");
+  ok(d.agentPrompt.includes("Thumbnailer") && d.agentPrompt.includes("[app]"), "agent prompt lacks README facts or draft toml");
+  // UI path: Draft modal via importing the folder first, then the header button
+  const a = await H.ipc.importApp(F + "/readme-app");
+  await H.openApp(a.id);
+  H.click('[data-testid="draft-manifest"]');
+  await H.waitFor(() => q('[data-testid="draft-modal"]'), 5000);
+  const ta = await H.waitFor(() => { const el = q('[data-testid="draft-toml"]'); return el && el.value.includes("[app]") ? el : null; }, 90000);
+  ok(q('[data-testid="draft-prompt"]') || qa('[data-testid="draft-modal"] button').some((b) => /prompt/i.test(b.textContent)), "agent prompt tab missing");
+  H.click('[data-testid="draft-apply"]');
+  await H.waitFor(() => !q('[data-testid="draft-modal"]'), 20000);
+  const app2 = await H.ipc.getApp(a.id);
+  ok(Object.keys(app2.manifest.inputs).length >= 2, "applied manifest has too few inputs: " + JSON.stringify(Object.keys(app2.manifest.inputs)));
+  const run = await H.ipc.startRun(a.id, {});
+  const fin = await waitRun(run.id, ["success", "failed", "killed"], 60000);
+  ok(fin.status === "success", "readme-app run after apply: " + fin.status + " " + (fin.logTail || "").slice(-200));
+  apps["readme-app"] = app2;
+});
+
+await t("local model: failed run gets an explanation (run://health) and Explain button", async () => {
+  apps["fail-app"] = await H.ipc.importApp(F + "/fail-app");
+  const a = apps["fail-app"];
+  await H.openApp(a.id);
+  const run = await H.ipc.startRun(a.id, {});
+  const fin = await waitRun(run.id, ["failed", "success", "killed"], 30000);
+  ok(fin.status === "failed", "fail-app should fail, got " + fin.status);
+  const banner = await H.waitFor(() => { const el = q('[data-testid="run-health"]'); return el && el.textContent.trim().length > 10 ? el : null; }, 60000);
+  await R("  health: [" + banner.dataset.severity + "] " + banner.textContent.trim().slice(0, 160));
+  ok(/config\.yaml|missing|not found|file/i.test(banner.textContent), "explanation does not mention the missing file: " + banner.textContent);
+  const ex = await H.ipc.explainRun(run.id);
+  ok(ex && ex.message && ex.message.length > 10, "explainRun returned nothing");
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});

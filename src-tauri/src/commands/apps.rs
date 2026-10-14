@@ -55,13 +55,27 @@ pub async fn list_apps(state: St<'_>) -> Result<Vec<AppRecord>> {
 /// Import a folder (or a single script file: use its parent dir as root).
 #[tauri::command]
 pub async fn import_app(state: St<'_>, app: tauri::AppHandle, path: String) -> Result<AppRecord> {
-    let p = PathBuf::from(&path);
+    import_path(state.inner(), &super::resources_dir(&app), &path).await
+}
+
+/// Body of `import_app`, shared with `apply_manifest`: infer/write manifest, upsert the row, start the watcher.
+pub async fn import_path(state: &std::sync::Arc<AppState>, res: &Path, path: &str) -> Result<AppRecord> {
+    let p = PathBuf::from(path);
     let p = p.canonicalize().map_err(|e| crate::error::Error::Msg(format!("Cannot open {path}: {e}")))?;
     let root = if p.is_file() { p.parent().map(|x| x.to_path_buf()).unwrap_or(p) } else { p };
     let root_str = root.to_string_lossy().to_string();
-    let res = super::resources_dir(&app);
-    let (mut m, mut hash, inferred) = load_or_infer(&root, &res)?;
+    let (mut m, mut hash, inferred) = load_or_infer(&root, res)?;
     if inferred {
+        // The inspector found nothing but the `extra` fallback: ask the local model (if available) to read the code.
+        let only_extra = m.inputs.len() == 1 && m.inputs.get("extra").map(|i| i.field_type == "args").unwrap_or(false);
+        if only_extra && state.model.status().await.available {
+            if let Some(src) = crate::manifest::infer::find_entry_script(&root).and_then(|s| std::fs::read_to_string(s).ok()) {
+                if let Some(mut inputs) = state.assistor.infer_schema_from_raw_code(&src).await {
+                    inputs.entry("extra".into()).or_insert_with(|| m.inputs["extra"].clone());
+                    m.inputs = inputs;
+                }
+            }
+        }
         write_manifest(&root, &m)?;
         if let Ok(b) = std::fs::read(root.join("homemade.toml")) { hash = crate::manifest::infer::sha256_hex(&b); }
     }
@@ -92,7 +106,7 @@ pub async fn import_app(state: St<'_>, app: tauri::AppHandle, path: String) -> R
         row
     };
     m.app.id = row.id.clone();
-    crate::manifest::watcher::watch_app(state.inner().clone(), row.id.clone(), root);
+    crate::manifest::watcher::watch_app(state.clone(), row.id.clone(), root);
     Ok(to_record(&row, m))
 }
 

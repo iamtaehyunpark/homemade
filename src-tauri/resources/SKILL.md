@@ -127,5 +127,11 @@ claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --
 
 Tools: `list_apps`, `get_app(app_id)` (parsed manifest + root_dir + has_custom_ui), `list_runs(app_id, limit?)`,
 `get_run_log(run_id)`, `last_failed_run(app_id)` (use this first when fixing a broken tool), `list_artifacts(app_id, run_id?)`,
-`validate_manifest(toml_text)` (returns `{ok, errors[], normalized_toml}`; run it after editing `homemade.toml`).
+`validate_manifest(toml_text)` (returns `{ok, errors[], normalized_toml}`; run it after editing `homemade.toml`),
+`draft_manifest(path)` (drafts a `homemade.toml` for a folder without writing it; returns `{toml, agentPrompt, factsSummary,
+validationErrors, usedModel, notes}`).
+
+To adapt an existing repo, ask Homemade to draft a manifest: call the MCP tool `draft_manifest` with the project folder,
+review the TOML (exec, mode, inputs), save it as `homemade.toml`, then `validate_manifest`. On macOS 26+ with Apple Intelligence
+enabled the draft uses Apple's on-device model (nothing leaves the machine); elsewhere it falls back to static inference.
 Runs cannot be started over MCP; the user starts them from the Homemade window.

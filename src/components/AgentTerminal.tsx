@@ -8,6 +8,7 @@ import type { AgentSessionRecord, AgentType, DetectedAgent, PtyDataEvent, PtyExi
 import { errMsg, relTime } from "../lib/format";
 import { Btn } from "./ui";
 import { terminals } from "../lib/registry";
+import { useStore } from "../state/store";
 
 interface Launch { agentType: AgentType; sessionId?: string; n: number }
 
@@ -40,9 +41,10 @@ export default function AgentTerminal({ appId }: { appId: string }) {
       setLaunch({ agentType: t, n: 0 });
     }).catch(() => { setAgents([]); setLaunch({ agentType: "custom_shell", n: 0 }); });
   }, []);
+  const summaryTick = useStore((s) => s.sessionSummaryTick);
   useEffect(() => {
     ipc.listAgentSessions(appId).then(setSessions).catch(() => setSessions([]));
-  }, [appId, launch]);
+  }, [appId, launch, summaryTick]);
 
   // terminal + event plumbing (once)
   useEffect(() => {

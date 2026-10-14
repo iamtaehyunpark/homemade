@@ -36,6 +36,11 @@ export default function Sidebar() {
     if (typeof r === "string") importPaths([r]);
   };
 
+  const pickDraft = async () => {
+    const r = await open({ directory: true, title: "Import folder & draft manifest" });
+    if (typeof r === "string") useStore.getState().setDraftPath(r);
+  };
+
   return (
     <aside ref={dropRef} className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
       <div className="flex items-center justify-between px-3 pb-2 pt-3">
@@ -44,6 +49,8 @@ export default function Sidebar() {
           {(close) => (<>
             <MenuItem onClick={() => { close(); pick(true); }}>Folder…</MenuItem>
             <MenuItem onClick={() => { close(); pick(false); }}>Script file…</MenuItem>
+            <div className="my-1 border-t border-line" />
+            <MenuItem testid="import-draft" onClick={() => { close(); pickDraft(); }}>Import folder &amp; draft manifest…</MenuItem>
           </>)}
         </Dropdown>
       </div>
