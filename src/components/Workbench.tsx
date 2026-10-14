@@ -1,6 +1,6 @@
 // OWNER: agent F. Dockview workbench: one panel per opened app, plus agent terminal panels.
 import { useEffect, useRef, useState } from "react";
-import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview";
+import { DockviewReact, themeDark, themeLight, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview";
 import { useStore } from "../state/store";
 import { openAppWindow } from "../lib/appWindow";
 import AppPanel from "./AppPanel";
@@ -87,7 +87,7 @@ export default function Workbench() {
 
   return (
     <div className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}>
-      <DockviewReact components={components} onReady={onReady} watermarkComponent={Watermark} />
+      <DockviewReact components={components} onReady={onReady} watermarkComponent={Watermark} theme={theme === "dark" ? themeDark : themeLight} />
     </div>
   );
 }
