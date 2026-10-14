@@ -1,0 +1,14 @@
+[app]
+id = "hello-worker"
+name = "Hello Worker"
+version = "0.1.0"
+description = "Warm Python worker exposing add() and slow()"
+mode = "rpc_worker"
+exec = "python3 worker.py"
+env_manager = "system"
+
+[ui]
+entry = "ui/index.html"
+
+[artifacts]
+output_dir = "./outputs"

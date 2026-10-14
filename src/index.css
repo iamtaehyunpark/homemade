@@ -2,5 +2,43 @@
 @import "dockview/dist/styles/dockview.css";
 @import "@xterm/xterm/css/xterm.css";
 
+@theme {
+  --color-bg: #0f1115;
+  --color-panel: #171a21;
+  --color-line: #262a33;
+  --color-accent: #6ea8fe;
+}
+
 :root { color-scheme: dark; }
-html, body, #root { height: 100%; margin: 0; background: #0f1115; color: #e6e6e6; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+html, body, #root { height: 100%; margin: 0; background: #0f1115; color: #e6e6e6; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: 13px; overflow: hidden; }
+* { scrollbar-width: thin; scrollbar-color: #333845 transparent; }
+
+.field { background: #0f1115; border: 1px solid #262a33; border-radius: 4px; padding: 3px 7px; color: #e6e6e6; font-size: 12px; outline: none; min-width: 0; }
+.field:focus { border-color: #6ea8fe; }
+.field[aria-invalid="true"] { border-color: #f87171; }
+select.field { padding-right: 4px; }
+
+[data-drop-hover] { outline: 2px dashed #6ea8fe; outline-offset: -2px; }
+
+.dockview-theme-dark {
+  --dv-background-color: #0f1115;
+  --dv-group-view-background-color: #171a21;
+  --dv-tabs-and-actions-container-background-color: #0f1115;
+  --dv-activegroup-visiblepanel-tab-background-color: #171a21;
+  --dv-activegroup-hiddenpanel-tab-background-color: #0f1115;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #171a21;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #0f1115;
+  --dv-activegroup-visiblepanel-tab-color: #e6e6e6;
+  --dv-activegroup-hiddenpanel-tab-color: #8b919e;
+  --dv-inactivegroup-visiblepanel-tab-color: #b5bac4;
+  --dv-inactivegroup-hiddenpanel-tab-color: #6b7280;
+  --dv-separator-border: #262a33;
+  --dv-paneview-header-border-color: #262a33;
+  --dv-tab-divider-color: #262a33;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: #6ea8fe;
+  --dv-drag-over-background-color: rgba(110, 168, 254, 0.15);
+  --dv-drag-over-border-color: #6ea8fe;
+  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-font-size: 12px;
+}

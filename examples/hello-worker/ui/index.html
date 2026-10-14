@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hello Worker</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px; background: #14161a; color: #e6e6e6; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  .card { background: #1d2026; border: 1px solid #2c3038; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  label { display: block; margin: 8px 0 4px; color: #a8adb7; font-size: 12px; }
+  input[type=text], input[type=number] { width: 100%; box-sizing: border-box; padding: 7px 9px; background: #121418; color: #e6e6e6; border: 1px solid #333844; border-radius: 6px; }
+  button { padding: 8px 14px; margin: 10px 8px 0 0; border: 0; border-radius: 6px; background: #4f7cff; color: white; font-weight: 600; cursor: pointer; }
+  button.secondary { background: #2c3038; }
+  button:disabled { opacity: .5; cursor: default; }
+  .bar { height: 8px; background: #121418; border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #4f7cff, #7ad7ff); transition: width .2s; }
+  #msg { color: #a8adb7; font-size: 12px; margin-top: 6px; }
+  pre { margin: 0; max-height: 220px; overflow: auto; background: #0f1114; padding: 10px; border-radius: 6px; font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  .row { display: flex; gap: 12px; align-items: center; }
+</style>
+</head>
+<body>
+  <h1>Hello Worker</h1>
+  <div class="card">
+    <div class="row"><input id="a" type="number" value="2"> + <input id="b" type="number" value="3"><button id="add">add()</button></div>
+    <div id="sum" style="margin-top:8px">=</div>
+  </div>
+  <div class="card">
+    <label>slow(n) steps</label>
+    <div class="row"><input id="n" type="number" value="6" min="1"><button id="slow">slow()</button></div>
+    <div class="bar" style="margin-top:12px"><div id="bar"></div></div>
+    <div id="msg">Idle</div>
+  </div>
+  <div class="card"><label>Output</label><pre id="out">(no output yet)</pre></div>
+  <div class="card"><label>Log</label><pre id="log"></pre></div>
+<script>
+  const hm = window.homemade, $ = (id) => document.getElementById(id);
+  const log = (s) => { const el = $("log"); el.textContent += s + "\n"; el.scrollTop = el.scrollHeight; };
+  hm.onWorkerReady(() => log("worker ready"));
+  hm.onStdout((p) => log(typeof p === "string" ? p : p.line ?? JSON.stringify(p)));
+  hm.onStderr((p) => log("[err] " + (typeof p === "string" ? p : p.line ?? JSON.stringify(p))));
+  hm.onProgress((p) => { $("bar").style.width = (p.pct ?? p.percent ?? 0) + "%"; $("msg").textContent = p.message ?? p.msg ?? ""; });
+  hm.onMetric((p) => log("metric " + JSON.stringify(p)));
+  const show = async (path) => {
+    try { $("out").textContent = await (await fetch(hm.assetUrl(path))).text(); }
+    catch (e) { $("out").textContent = "Could not load " + path + ": " + e; }
+  };
+  $("add").onclick = async () => {
+    try { $("sum").textContent = "= " + await hm.call("add", { a: Number($("a").value), b: Number($("b").value) }); }
+    catch (e) { $("sum").textContent = "Error: " + e.message; }
+  };
+  $("slow").onclick = async () => {
+    $("slow").disabled = true; $("bar").style.width = "0"; $("msg").textContent = "Working...";
+    try { const r = await hm.call("slow", { n: Number($("n").value) }); $("msg").textContent = "Done (" + r.steps + " steps)"; await show(r.file); }
+    catch (e) { $("msg").textContent = "Error: " + e.message; }
+    finally { $("slow").disabled = false; }
+  };
+</script>
+</body>
+</html>

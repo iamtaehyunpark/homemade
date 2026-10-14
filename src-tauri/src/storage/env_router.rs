@@ -6,8 +6,22 @@ use std::path::Path;
 /// If !isolated: HF_HOME, TORCH_HOME, OLLAMA_MODELS, PLAYWRIGHT_BROWSERS_PATH under <home>/store/shared_cache/.
 /// Creates the directories if missing.
 pub fn inject_shared_storage_env(env: &mut HashMap<String, String>, homemade_home: &Path, isolated: bool) {
-    let _ = (env, homemade_home, isolated);
-    // agent C
+    let store = homemade_home.join("store");
+    let mut set = |k: &str, p: std::path::PathBuf| {
+        let _ = std::fs::create_dir_all(&p);
+        env.insert(k.into(), p.to_string_lossy().into_owned());
+    };
+    set("UV_CACHE_DIR", store.join("uv_cache"));
+    set("PNPM_HOME", store.join("pnpm_store"));
+    set("npm_config_store_dir", store.join("pnpm_store"));
+    if !isolated {
+        let shared = store.join("shared_cache");
+        set("HF_HOME", shared.join("huggingface"));
+        set("TORCH_HOME", shared.join("torch"));
+        set("OLLAMA_MODELS", shared.join("ollama"));
+        set("PLAYWRIGHT_BROWSERS_PATH", shared.join("playwright"));
+    }
+    env.insert("UV_LINK_MODE".into(), "clone".into());
 }
 
 /// Create ~/.homemade/{store/uv_cache,store/pnpm_store,store/shared_cache/{huggingface,torch,ollama,playwright},sessions,skills}.

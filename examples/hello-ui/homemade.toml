@@ -1,0 +1,44 @@
+[app]
+id = "hello-ui"
+name = "Hello UI"
+version = "0.1.0"
+description = "Hello CLI with a custom HTML UI"
+mode = "cli"
+exec = "python3 main.py"
+env_manager = "system"
+
+[ui]
+entry = "ui/index.html"
+default_layout = "tab"
+
+[artifacts]
+output_dir = "./outputs"
+
+[inputs.name]
+type = "string"
+cli_flag = "--name"
+label = "Name"
+default = "World"
+
+[inputs.count]
+type = "int"
+cli_flag = "--count"
+label = "Count"
+default = 3
+min = 1
+max = 20
+step = 1
+
+[inputs.shout]
+type = "bool"
+cli_flag = "--shout"
+label = "Shout"
+bool_style = "flag_only"
+default = false
+
+[inputs.input_file]
+type = "file"
+positional_index = 0
+label = "Input file (optional)"
+required = false
+extensions = ["txt", "md"]

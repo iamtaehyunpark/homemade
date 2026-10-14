@@ -46,6 +46,14 @@ pub struct ActiveRun {
     /// Peak RSS observed by the telemetry poller.
     pub peak_ram_mb: std::sync::atomic::AtomicU64,
     pub peak_vram_mb: std::sync::atomic::AtomicU64,
+    /// App root dir (relative @homemade:artifact paths resolve against it).
+    pub root: PathBuf,
+    /// Execution mode string ("cli" | "rpc_worker" | "webapp").
+    pub mode: String,
+    /// Resolved secret values, used to redact stored logs.
+    pub secrets: HashMap<String, String>,
+    /// Paths already indexed via @homemade:artifact (post-run diff skips them).
+    pub announced_artifacts: std::sync::Mutex<Vec<String>>,
 }
 
 /// A job waiting for admission (scheduler) or about to be spawned.

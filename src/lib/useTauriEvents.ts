@@ -1,0 +1,50 @@
+// Global Tauri event listeners -> zustand stores. Mount once in App.
+import { useEffect } from "react";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { ipc, on, events } from "./ipc";
+import type { ArtifactRecord, ResourceSnapshot, RunLineEvent, RunMetricEvent, RunProgressEvent, RunRecord } from "./types";
+import { useStore } from "../state/store";
+import { useLive, type LogLine } from "../state/live";
+import { isTerminal } from "./format";
+
+export function useTauriEvents() {
+  useEffect(() => {
+    let disposed = false;
+    const unlisten: UnlistenFn[] = [];
+    let pending: Record<string, LogLine[]> = {};
+    let raf = 0;
+    const flush = () => { raf = 0; const b = pending; pending = {}; useLive.getState().pushLines(b); };
+    const pushLine = (runId: string, line: LogLine) => {
+      (pending[runId] ??= []).push(line);
+      if (!raf) raf = requestAnimationFrame(flush);
+    };
+    const st = useStore.getState;
+
+    const subs: Promise<UnlistenFn>[] = [
+      on<RunRecord>(events.runStatus, (r) => {
+        const prev = st().runs[r.id];
+        st().upsertRun(r);
+        if (isTerminal(r.status) && !isTerminal(prev?.status)) {
+          st().bumpArtifacts(r.appId);
+          ipc.getApp(r.appId).then(st().upsertApp).catch(() => {});
+        }
+      }),
+      on<RunLineEvent>(events.runStdout, (p) => pushLine(p.runId, { err: false, text: p.line })),
+      on<RunLineEvent>(events.runStderr, (p) => pushLine(p.runId, { err: true, text: p.line })),
+      on<RunProgressEvent>(events.runProgress, (p) => useLive.getState().setProgress(p.runId, p.percent, p.message)),
+      on<RunMetricEvent>(events.runMetric, (p) => useLive.getState().mergeMetric(p.runId, p.data)),
+      on<ArtifactRecord>(events.runArtifact, (a) => st().bumpArtifacts(a.appId)),
+      on<ResourceSnapshot>(events.resourcesTick, (r) => st().setResources(r)),
+      on<{ appId: string }>(events.appChanged, ({ appId }) => { ipc.getApp(appId).then(st().upsertApp).catch(() => {}); }),
+      on<number>(events.confirmExit, (n) => st().setConfirmExit(n)),
+      on<{ appId: string; message: string }>(events.storageProgress, (p) => st().notify(p.message)),
+    ];
+    for (const s of subs) s.then((u) => (disposed ? u() : unlisten.push(u))).catch(() => {});
+
+    ipc.listApps().then(st().setApps).catch((e) => console.error("listApps", e));
+    ipc.listActiveRuns().then((rs) => rs.forEach(st().upsertRun)).catch(() => {});
+    ipc.resourceSnapshot().then(st().setResources).catch(() => {});
+
+    return () => { disposed = true; unlisten.forEach((u) => u()); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+}

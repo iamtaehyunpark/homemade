@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hello UI</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px; background: #14161a; color: #e6e6e6; font: 14px/1.5 -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  .card { background: #1d2026; border: 1px solid #2c3038; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  label { display: block; margin: 8px 0 4px; color: #a8adb7; font-size: 12px; }
+  input[type=text], input[type=number] { width: 100%; box-sizing: border-box; padding: 7px 9px; background: #121418; color: #e6e6e6; border: 1px solid #333844; border-radius: 6px; }
+  button { padding: 8px 14px; margin: 10px 8px 0 0; border: 0; border-radius: 6px; background: #4f7cff; color: white; font-weight: 600; cursor: pointer; }
+  button.secondary { background: #2c3038; }
+  button:disabled { opacity: .5; cursor: default; }
+  .bar { height: 8px; background: #121418; border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #4f7cff, #7ad7ff); transition: width .2s; }
+  #msg { color: #a8adb7; font-size: 12px; margin-top: 6px; }
+  pre { margin: 0; max-height: 220px; overflow: auto; background: #0f1114; padding: 10px; border-radius: 6px; font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  .row { display: flex; gap: 12px; align-items: center; }
+</style>
+</head>
+<body>
+  <h1>Hello UI</h1>
+  <div class="card">
+    <label>Name</label><input id="name" type="text" value="World">
+    <label>Count</label><input id="count" type="number" value="3" min="1" max="20">
+    <label class="row"><input id="shout" type="checkbox"> Shout</label>
+    <label>Input file (optional)</label>
+    <div class="row"><input id="file" type="text" placeholder="Pick or drop a file" readonly><button class="secondary" id="pick">Browse</button></div>
+    <button id="run">Run</button><button class="secondary" id="stop" disabled>Stop</button>
+  </div>
+  <div class="card">
+    <div class="bar"><div id="bar"></div></div>
+    <div id="msg">Idle</div>
+  </div>
+  <div class="card"><label>Output</label><pre id="out">(no output yet)</pre></div>
+  <div class="card"><label>Log</label><pre id="log"></pre></div>
+<script>
+  const hm = window.homemade, $ = (id) => document.getElementById(id);
+  const log = (s) => { const el = $("log"); el.textContent += s + "\n"; el.scrollTop = el.scrollHeight; };
+  hm.onStdout((p) => log(typeof p === "string" ? p : p.line ?? JSON.stringify(p)));
+  hm.onStderr((p) => log("[err] " + (typeof p === "string" ? p : p.line ?? JSON.stringify(p))));
+  hm.onProgress((p) => { $("bar").style.width = (p.pct ?? p.percent ?? 0) + "%"; $("msg").textContent = p.message ?? p.msg ?? ""; });
+  hm.onArtifact(async (p) => {
+    const path = typeof p === "string" ? p : p.path;
+    try { $("out").textContent = await (await fetch(hm.assetUrl(path))).text(); }
+    catch (e) { $("out").textContent = "Could not load " + path + ": " + e; }
+  });
+  hm.onFileDrop((p) => { const paths = Array.isArray(p) ? p : p.paths || []; if (paths[0]) $("file").value = paths[0]; });
+  $("pick").onclick = async () => { const r = await hm.pickFile({ multiple: false, extensions: ["txt", "md"] }); const v = Array.isArray(r) ? r[0] : r; if (v) $("file").value = v; };
+  $("stop").onclick = () => hm.stop();
+  $("run").onclick = async () => {
+    $("run").disabled = true; $("stop").disabled = false; $("log").textContent = ""; $("bar").style.width = "0"; $("msg").textContent = "Starting...";
+    const inputs = { name: $("name").value, count: Number($("count").value), shout: $("shout").checked };
+    if ($("file").value) inputs.input_file = $("file").value;
+    try { const rec = await hm.run(inputs); $("msg").textContent = "Finished: " + (rec && rec.status || "done"); }
+    catch (e) { $("msg").textContent = "Error: " + e.message; }
+    finally { $("run").disabled = false; $("stop").disabled = true; }
+  };
+</script>
+</body>
+</html>
