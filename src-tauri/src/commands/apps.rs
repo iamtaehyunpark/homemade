@@ -8,7 +8,7 @@ use crate::state::AppState;
 use crate::types::AppRecord;
 use std::path::{Path, PathBuf};
 
-fn to_record(row: &AppRow, mut manifest: HomemadeManifest) -> AppRecord {
+pub fn to_record(row: &AppRow, mut manifest: HomemadeManifest) -> AppRecord {
     let root = Path::new(&row.root_dir);
     let has_custom_ui = manifest.ui.entry.as_ref().map(|e| root.join(e).is_file()).unwrap_or(false);
     manifest.app.id = row.id.clone();
@@ -37,7 +37,9 @@ pub fn load_app(state: &AppState, resources_dir: &Path, app_id: &str) -> Result<
 
 /// All registered apps with manifests loaded. Missing folders are skipped (row kept).
 #[tauri::command]
-pub async fn list_apps(state: St<'_>) -> Result<Vec<AppRecord>> {
+pub async fn list_apps(state: St<'_>) -> Result<Vec<AppRecord>> { list_apps_inner(&state) }
+
+pub fn list_apps_inner(state: &AppState) -> Result<Vec<AppRecord>> {
     let rows = { let c = state.db.lock().unwrap(); queries::list_apps(&c)? };
     let res = super::resources_dir(&state.app_handle);
     let mut out = vec![];
@@ -119,8 +121,12 @@ pub async fn get_app(state: St<'_>, app: tauri::AppHandle, app_id: String) -> Re
 /// Re-read homemade.toml from disk (after agent edits) and update hash/mode.
 #[tauri::command]
 pub async fn reload_manifest(state: St<'_>, app: tauri::AppHandle, app_id: String) -> Result<AppRecord> {
-    let (mut row, _) = load_app(&state, &super::resources_dir(&app), &app_id)?;
-    let (m, hash, _) = load_or_infer(Path::new(&row.root_dir), &super::resources_dir(&app))?;
+    reload_manifest_inner(&state, &super::resources_dir(&app), &app_id)
+}
+
+pub fn reload_manifest_inner(state: &AppState, res: &Path, app_id: &str) -> Result<AppRecord> {
+    let (mut row, _) = load_app(state, res, app_id)?;
+    let (m, hash, _) = load_or_infer(Path::new(&row.root_dir), res)?;
     row.manifest_hash = hash;
     row.execution_mode = m.app.mode.as_str().to_string();
     row.name = m.app.name.clone();
@@ -131,6 +137,11 @@ pub async fn reload_manifest(state: St<'_>, app: tauri::AppHandle, app_id: Strin
 /// Unregister. Never deletes source files.
 #[tauri::command]
 pub async fn remove_app(state: St<'_>, app_id: String, purge_scratch: bool, delete_venv: bool) -> Result<()> {
+    remove_app_inner(&state, &app_id, purge_scratch, delete_venv)
+}
+
+pub fn remove_app_inner(state: &AppState, app_id: &str, purge_scratch: bool, delete_venv: bool) -> Result<()> {
+    let app_id = app_id.to_string();
     let row = { let c = state.db.lock().unwrap(); queries::get_app(&c, &app_id)? };
     crate::manifest::watcher::unwatch_app(&app_id);
     if let Some(row) = &row {
@@ -159,5 +170,5 @@ pub async fn save_manifest(state: St<'_>, app: tauri::AppHandle, app_id: String,
     let row = { let c = state.db.lock().unwrap(); queries::get_app(&c, &app_id)? };
     let Some(row) = row else { return err(format!("Unknown app: {app_id}")) };
     std::fs::write(Path::new(&row.root_dir).join("homemade.toml"), &toml_text)?;
-    reload_manifest(state, app, app_id).await
+    reload_manifest_inner(&state, &super::resources_dir(&app), &app_id)
 }

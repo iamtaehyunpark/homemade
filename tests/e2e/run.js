@@ -458,6 +458,31 @@ await t("launch view: tiles list programs and open them in a solo window", async
   H.store.getState().setView("workbench");
 });
 
+await t("control socket: CLI + MCP drive the live app (tests/e2e/control.sh)", async () => {
+  await R("CONTROL_NOW");
+  const txt = await H.waitFor(async () => { const t = await H.ipc.readTextFile(F + "/control.result").catch(() => ""); return t.includes("DONE") ? t : null; }, 120000);
+  for (const l of txt.trim().split("\n")) await R("  " + l);
+  ok(txt.includes("DONE ok"), "control.sh reported failures");
+  // `homemade open hello-cli` must have reached the main window.
+  await H.waitFor(() => H.store.getState().selectedAppId === "hello-cli" && H.store.getState().view === "workbench", 5000);
+});
+
+await t("pop-out of an already-serving webapp catches up on port + readiness", async () => {
+  const a = apps["webapp-app"];
+  await H.openApp(a.id);
+  const r = await H.ipc.startRun(a.id, {});
+  await H.waitFor(() => H.store.getState().webappReady[r.id], 20000);
+  const info = await H.ipc.appProcessInfo(a.id);
+  ok(info && info.runId === r.id && info.port && info.ready === true, "process info must carry port+ready for late windows: " + JSON.stringify(info));
+  const label = "app-" + a.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  H.click(`[data-app-panel="${a.id}"] [data-testid="open-in-window"]`);
+  await H.waitFor(async () => (await H.windows()).includes(label), 15000);
+  await sleep(2500); // the window seeds itself from appProcessInfo on mount
+  await H.closeWindow(label); // closing the solo window stops the run
+  await H.waitFor(async () => !(await H.windows()).includes(label), 20000);
+  await waitRun(r.id, ["killed", "success", "failed"], 20000);
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});

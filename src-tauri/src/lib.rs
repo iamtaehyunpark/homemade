@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod control;
 pub mod db;
 pub mod error;
 pub mod integrations;
@@ -43,6 +44,7 @@ pub fn run() {
                 assistor,
             });
             app.manage(state.clone());
+            control::start(state.clone());
             #[cfg(target_os = "macos")]
             macos_quit::install(state.clone());
 

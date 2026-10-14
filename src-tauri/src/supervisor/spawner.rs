@@ -173,6 +173,7 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
         stdin: tokio::sync::Mutex::new(stdin),
         rpc_pending: Default::default(),
         worker_ready: AtomicBool::new(false),
+        webapp_ready: AtomicBool::new(false),
         port: std::sync::Mutex::new(None),
         stop_requested: AtomicBool::new(false),
         peak_ram_mb: AtomicU64::new(0),

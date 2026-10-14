@@ -61,7 +61,9 @@ pub struct ListeningPort {
 /// Every TCP port in LISTEN state on this machine (via `lsof -nP -iTCP -sTCP:LISTEN`), attributed to
 /// Homemade runs by process group. Lets the Monitor answer "who is holding port 8765?".
 #[tauri::command]
-pub async fn list_listening_ports(state: St<'_>) -> Result<Vec<ListeningPort>> {
+pub async fn list_listening_ports(state: St<'_>) -> Result<Vec<ListeningPort>> { list_listening_ports_inner(&state).await }
+
+pub async fn list_listening_ports_inner(state: &crate::state::AppState) -> Result<Vec<ListeningPort>> {
     let out = tokio::process::Command::new("lsof").args(["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcn"]).output().await?;
     let text = String::from_utf8_lossy(&out.stdout);
     let known: Vec<(i32, String, String)> = { let c = state.db.lock().unwrap(); crate::db::queries::list_run_pgids(&c).unwrap_or_default() };
@@ -94,14 +96,16 @@ pub async fn list_listening_ports(state: St<'_>) -> Result<Vec<ListeningPort>> {
 
 /// Kill the process group holding a port, but only if Homemade launched it (its pgid matches a recorded run).
 #[tauri::command]
-pub async fn kill_port_owner(state: St<'_>, pid: i32) -> Result<()> {
+pub async fn kill_port_owner(state: St<'_>, pid: i32) -> Result<()> { kill_port_owner_inner(state.inner().clone(), pid).await }
+
+pub async fn kill_port_owner_inner(state: std::sync::Arc<crate::state::AppState>, pid: i32) -> Result<()> {
     let pg = unsafe { libc::getpgid(pid) };
     let known = { let c = state.db.lock().unwrap(); crate::db::queries::list_run_pgids(&c).unwrap_or_default() };
     let Some((_, run_id, _)) = known.into_iter().find(|(g, _, _)| *g == pg || *g == pid) else {
         return crate::error::err(format!("Process {pid} was not started by Homemade; stop it yourself (e.g. `kill {pid}`)."));
     };
     if state.active_runs.contains_key(&run_id) {
-        return crate::supervisor::spawner::stop_run(state.inner().clone(), &run_id).await;
+        return crate::supervisor::spawner::stop_run(state.clone(), &run_id).await;
     }
     crate::supervisor::reaper::terminate_process_group(if pg > 1 { pg } else { pid }, 1000, 2000).await;
     Ok(())
@@ -109,13 +113,13 @@ pub async fn kill_port_owner(state: St<'_>, pid: i32) -> Result<()> {
 
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct ProcessInfo { pub run_id: String, pub pid: i32, pub pgid: i32, pub port: Option<u16> }
+pub struct ProcessInfo { pub run_id: String, pub pid: i32, pub pgid: i32, pub port: Option<u16>, pub ready: bool }
 
 /// The active run's process identity for an app (None when nothing is running).
 #[tauri::command]
 pub async fn app_process_info(state: St<'_>, app_id: String) -> Result<Option<ProcessInfo>> {
     Ok(state.active_runs.iter().find(|e| e.value().app_id == app_id).map(|e| {
         let r = e.value();
-        ProcessInfo { run_id: r.run_id.clone(), pid: r.pid, pgid: r.pgid, port: *r.port.lock().unwrap() }
+        ProcessInfo { run_id: r.run_id.clone(), pid: r.pid, pgid: r.pgid, port: *r.port.lock().unwrap(), ready: r.webapp_ready.load(std::sync::atomic::Ordering::Relaxed) }
     }))
 }

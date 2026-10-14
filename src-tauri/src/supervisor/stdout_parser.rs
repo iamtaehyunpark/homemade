@@ -115,6 +115,7 @@ fn handle_directive(state: &Arc<AppState>, run: &Arc<ActiveRun>, rest: &str) -> 
                     let ok = tokio::time::timeout(std::time::Duration::from_millis(500), tokio::net::TcpStream::connect(addr)).await
                         .map(|r| r.is_ok()).unwrap_or(false);
                     if ok {
+                        if let Some(r) = st.active_runs.get(&run_id) { r.webapp_ready.store(true, std::sync::atomic::Ordering::Relaxed); }
                         st.emit("run://webapp_ready", json!({ "runId": run_id, "port": port }));
                         return;
                     }

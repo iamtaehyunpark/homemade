@@ -6,7 +6,9 @@ import type { QueuedJobInfo, ArtifactRecord, ResourceSnapshot, RunLineEvent, Run
 import { useStore } from "../state/store";
 import { useLive, type LogLine } from "../state/live";
 import { isTerminal } from "./format";
-import { DOCK_EVENT, forceTab, inWindow } from "./appWindow";
+import { DOCK_EVENT, forceTab, inWindow, openAppWindow, appWindowLabel } from "./appWindow";
+import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+const isMainWindow = () => getCurrentWebviewWindow().label === "main";
 
 export function useTauriEvents() {
   useEffect(() => {
@@ -44,6 +46,15 @@ export function useTauriEvents() {
       on<{ appId: string; message: string }>(events.storageProgress, (p) => st().notify(p.message)),
       on<{ message: string }>(events.notice, (p) => st().notify(p.message)),
       on<{ appId: string }>(DOCK_EVENT, ({ appId }) => { inWindow.delete(appId); forceTab.add(appId); st().openApp(appId); }),
+      // Control socket (CLI / MCP) → UI. Only the main window acts on these.
+      on<{ appId: string; window: boolean }>("control://open", ({ appId, window: w }) => {
+        if (!isMainWindow()) return;
+        const app = st().apps.find((a) => a.id === appId);
+        if (w && app) { openAppWindow(app); st().closeApp(appId); } else { inWindow.delete(appId); forceTab.add(appId); st().openApp(appId); }
+      }),
+      on<{ appId: string }>("control://close-window", ({ appId }) => { if (isMainWindow()) WebviewWindow.getByLabel(appWindowLabel(appId)).then((w) => w?.close()).catch(() => {}); }),
+      on<{ view: "workbench" | "launch" | "monitor" | "settings" }>("control://view", ({ view }) => { if (isMainWindow()) st().setView(view); }),
+      on<{ appId: string }>("app://removed", ({ appId }) => { st().closeApp(appId); ipc.listApps().then(st().setApps).catch(() => {}); }),
       on<RunHealthEvent>(events.runHealth, (p) => st().setHealth(p.runId, { severity: p.severity, message: p.message })),
       on<PtySessionSummaryEvent>(events.ptySessionSummary, () => st().bumpSessionSummary()),
       on<ModelStatusEvent>(events.modelStatus, (p) => {
@@ -54,7 +65,11 @@ export function useTauriEvents() {
     for (const s of subs) s.then((u) => (disposed ? u() : unlisten.push(u))).catch(() => {});
 
     ipc.listApps().then(st().setApps).catch((e) => console.error("listApps", e));
-    ipc.listActiveRuns().then((rs) => rs.forEach(st().upsertRun)).catch(() => {});
+    ipc.listActiveRuns().then((rs) => {
+      rs.forEach(st().upsertRun);
+      // Late subscriber (a window opened while a webapp was already serving): catch up on port + readiness.
+      for (const r of rs) ipc.appProcessInfo(r.appId).then((p) => { if (p && p.runId === r.id && p.port) { st().setPort(r.id, p.port); if (p.ready) st().setWebappReady(r.id); } }).catch(() => {});
+    }).catch(() => {});
     ipc.resourceSnapshot().then(st().setResources).catch(() => {});
     ipc.modelStatus().then(st().setModelStatus).catch(() => {});
 

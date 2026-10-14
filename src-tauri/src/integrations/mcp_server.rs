@@ -1,4 +1,6 @@
-//! `homemade --mcp`: stdio MCP server, read-only DB (spec §10D) + draft_manifest (local model). OWNER: agent G2.
+//! `homemade --mcp`: stdio MCP server. When the GUI is running every tool is forwarded to its control socket
+//! (full control: import, run, stop, wait, open windows, …); otherwise the read-only tools answer from the DB
+//! (spec §10D) and the write tools say how to launch the GUI. OWNER: agent G2.
 //! Newline-delimited JSON-RPC 2.0 on stdin/stdout. Nothing but responses is written to stdout.
 use crate::db::queries;
 use crate::error::Result;
@@ -94,9 +96,38 @@ fn handle(msg: &Value, db: &mut Option<Connection>) -> Option<Value> {
     Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
 }
 
+/// Tools that work without the GUI (read-only DB / local model). Everything else needs the control socket.
+const OFFLINE_TOOLS: &[&str] = &["list_apps", "get_app", "list_runs", "get_run_log", "last_failed_run", "list_artifacts", "draft_manifest", "validate_manifest", "status", "launch_gui"];
+
 fn tool_defs() -> Value {
     let s = |props: Value, req: &[&str]| json!({ "type": "object", "properties": props, "required": req });
+    let id = json!({ "type": "string" });
+    let inputs = json!({ "type": "object", "description": "input values keyed by the manifest's [inputs] names" });
     json!([
+        { "name": "status", "description": "Is the Homemade GUI running? Returns {running, version, active_runs, model} or {running:false}.", "inputSchema": s(json!({}), &[]) },
+        { "name": "launch_gui", "description": "Start the Homemade GUI if it is not running and wait for it (needed for every tool that runs or controls programs).", "inputSchema": s(json!({}), &[]) },
+        { "name": "import_app", "description": "Register a project folder (or a script; its folder is used) with Homemade. Infers homemade.toml when absent. Returns the app record.", "inputSchema": s(json!({ "path": { "type": "string" } }), &["path"]) },
+        { "name": "remove_app", "description": "Unregister an app (source files are never deleted).", "inputSchema": s(json!({ "app_id": id, "purge_scratch": { "type": "boolean" }, "delete_venv": { "type": "boolean" } }), &["app_id"]) },
+        { "name": "apply_manifest", "description": "Write homemade.toml into a folder (after validation) and register it. Use after draft_manifest.", "inputSchema": s(json!({ "path": { "type": "string" }, "toml": { "type": "string" } }), &["path", "toml"]) },
+        { "name": "save_manifest", "description": "Overwrite a registered app's homemade.toml and reload it.", "inputSchema": s(json!({ "app_id": id, "toml": { "type": "string" } }), &["app_id", "toml"]) },
+        { "name": "start_run", "description": "Start a run of an app with the given inputs. Returns the run record (id, status, cli_command). Pair with wait_run.", "inputSchema": s(json!({ "app_id": id, "inputs": inputs }), &["app_id"]) },
+        { "name": "wait_run", "description": "Block until a run finishes (default timeout 10 min). Returns the final run record with exit_code and log_tail.", "inputSchema": s(json!({ "run_id": id, "timeout_ms": { "type": "integer" } }), &["run_id"]) },
+        { "name": "stop_run", "description": "Stop a run cleanly (SIGINT, then SIGTERM, then SIGKILL).", "inputSchema": s(json!({ "run_id": id }), &["run_id"]) },
+        { "name": "get_run", "description": "One run record by id.", "inputSchema": s(json!({ "run_id": id }), &["run_id"]) },
+        { "name": "list_active_runs", "description": "Runs in progress right now.", "inputSchema": s(json!({}), &[]) },
+        { "name": "build_cli_command", "description": "The exact shell command a run with these inputs would execute (without running it).", "inputSchema": s(json!({ "app_id": id, "inputs": inputs }), &["app_id"]) },
+        { "name": "rpc_call", "description": "Call a method on an app's warm rpc_worker (start it first with start_run).", "inputSchema": s(json!({ "app_id": id, "method": { "type": "string" }, "params": { "type": "object" } }), &["app_id", "method"]) },
+        { "name": "explain_run", "description": "Local-model explanation of what went wrong in a run (needs Apple Intelligence).", "inputSchema": s(json!({ "run_id": id }), &["run_id"]) },
+        { "name": "list_presets", "description": "Saved input presets of an app.", "inputSchema": s(json!({ "app_id": id }), &["app_id"]) },
+        { "name": "save_preset", "description": "Save an input preset.", "inputSchema": s(json!({ "app_id": id, "name": { "type": "string" }, "inputs": inputs }), &["app_id", "name"]) },
+        { "name": "git_status", "description": "Git status of the app folder (branch, log with Homemade checkpoints, dirty files).", "inputSchema": s(json!({ "app_id": id }), &["app_id"]) },
+        { "name": "git_checkpoint", "description": "Commit everything in the app folder as a Homemade checkpoint. Returns {sha}.", "inputSchema": s(json!({ "app_id": id, "message": { "type": "string" } }), &["app_id"]) },
+        { "name": "open_app", "description": "Show the app in the GUI: as a tab, or (window=true) in its own solo window like a standalone program.", "inputSchema": s(json!({ "app_id": id, "window": { "type": "boolean" } }), &["app_id"]) },
+        { "name": "close_window", "description": "Close an app's solo window; this stops its run cleanly.", "inputSchema": s(json!({ "app_id": id }), &["app_id"]) },
+        { "name": "show_view", "description": "Switch the main window to a view.", "inputSchema": s(json!({ "view": { "type": "string", "enum": ["workbench", "launch", "monitor", "settings"] } }), &["view"]) },
+        { "name": "resource_snapshot", "description": "Live CPU / RAM / GPU usage, per-run usage and the GPU admission queue.", "inputSchema": s(json!({}), &[]) },
+        { "name": "list_listening_ports", "description": "Every listening TCP port on the machine, attributed to Homemade runs where possible.", "inputSchema": s(json!({}), &[]) },
+        { "name": "kill_port_owner", "description": "Stop the process group holding a port, only if Homemade launched it.", "inputSchema": s(json!({ "pid": { "type": "integer" } }), &["pid"]) },
         { "name": "list_apps", "description": "List apps registered in Homemade (id, name, root_dir, mode, last_run_at).",
           "inputSchema": s(json!({}), &[]) },
         { "name": "get_app", "description": "Get an app's parsed homemade.toml manifest, root_dir and whether it has a custom UI.",
@@ -127,6 +158,30 @@ fn conn<'a>(db: &'a mut Option<Connection>) -> std::result::Result<&'a Connectio
 
 fn call_tool(name: &str, args: &Value, db: &mut Option<Connection>) -> std::result::Result<Value, String> {
     let e = |x: crate::error::Error| x.to_string();
+    match name {
+        "status" => return Ok(match crate::control::client::call("status", &json!({})) {
+            Ok(v) => json!({ "running": true, "version": v["version"], "pid": v["pid"], "home": v["home"], "active_runs": v["active_runs"], "model": v["model"] }),
+            Err(err) => json!({ "running": false, "hint": err }),
+        }),
+        "launch_gui" => { crate::control::client::launch_gui(std::time::Duration::from_secs(25))?; return Ok(json!({ "running": true })); }
+        _ => {}
+    }
+    // Live path: the GUI's supervisor answers (same code as the UI). `get_run_log` returns lines there; keep this server's shape.
+    if crate::control::client::available() {
+        let method = match name { "last_failed_run" => "list_runs", n => n };
+        let mut params = args.clone();
+        if name == "last_failed_run" { params["limit"] = json!(200); }
+        if name == "list_runs" && params.get("limit").is_none() { params["limit"] = json!(20); }
+        let v = crate::control::client::call(method, &params)?;
+        return Ok(match name {
+            "last_failed_run" => v.as_array().and_then(|a| a.iter().find(|r| r["status"] == "failed" || r["status"] == "killed").cloned()).unwrap_or(Value::Null),
+            "get_run_log" => json!({ "run_id": args["run_id"], "log": v }),
+            _ => v,
+        });
+    }
+    if !OFFLINE_TOOLS.contains(&name) {
+        return Err("Homemade is not running, so this tool is unavailable. Call `launch_gui` first (or `open -a Homemade`).".into());
+    }
     match name {
         "list_apps" => {
             let apps = queries::list_apps(conn(db)?).map_err(e)?;

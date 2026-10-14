@@ -47,7 +47,7 @@ export interface GitLogEntry { sha: string; message: string; timestamp: number; 
 export interface GitDirtyFile { path: string; status: string }
 export interface GitStatus { initialized: boolean; dirty: boolean; head: string | null; log: GitLogEntry[]; dirtyFiles: GitDirtyFile[] }
 export interface StorageRef { assetHash: string; assetPath: string; appId: string; sizeBytes: number }
-export interface AppProcessInfo { runId: string; pid: number; pgid: number; port: number | null }
+export interface AppProcessInfo { runId: string; pid: number; pgid: number; port: number | null; ready: boolean }
 export interface DetectedAgent { agentType: AgentType; binaryPath: string; displayName: string }
 export interface PtyInfo { ptyId: string; appId: string; agentType: AgentType; sessionId: string | null }
 export interface StorageSummary { storeRoot: string; uvCacheBytes: number; pnpmStoreBytes: number; sharedCacheBytes: number; unmanagedVenvTotalBytes: number }

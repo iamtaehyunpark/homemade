@@ -45,6 +45,8 @@ pub struct ActiveRun {
     pub worker_ready: std::sync::atomic::AtomicBool,
     /// Port announced via `@homemade:port` (webapp mode).
     pub port: std::sync::Mutex<Option<u16>>,
+    /// Set once the readiness probe connected to `port` (so late subscribers, e.g. a new window, can catch up).
+    pub webapp_ready: std::sync::atomic::AtomicBool,
     /// Set when a stop was requested, so the exit handler records 'killed' instead of 'failed'.
     pub stop_requested: std::sync::atomic::AtomicBool,
     /// Peak RSS observed by the telemetry poller.

@@ -327,3 +327,18 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
   use the darker shade on light (e.g. `text-emerald-700` light / `text-emerald-400` dark via `dark:` is NOT available — use token classes `text-ok|warn|danger`).
 - `tauri.conf.json` window `backgroundColor` → "#f6f7f9" so the window does not flash dark; `index.html` sets `data-theme` from localStorage before
   React mounts (inline script) to avoid a flash.
+
+## Control surface (2026-10-14) — CLI + MCP with full access
+
+- `src-tauri/src/control/mod.rs`: the GUI serves a Unix socket at `<tmp>/homemade-<hash(home)>.sock` (newline JSON
+  `{id, token, method, params}` → `{id, result|error}`); `<home>/control.json` = `{token, socket, pid}` (0600, new per launch). `dispatch()` reuses the command bodies
+  (`*_inner` functions factored out of `commands/*`) plus `status`, `wait_run`, `open_app`, `close_window`, `show_view`
+  (the last three emit `control://open|close-window|view`; only the main window acts). `app://removed` is emitted on remove.
+  On launch (default home only) it writes the shim `<home>/bin/homemade`.
+- `control/client.rs`: blocking client (`call`, `available`, `launch_gui`). `control/cli.rs`: `homemade <cmd>` (see `homemade help`);
+  `main.rs` routes: no args → GUI, `--mcp` → MCP, anything else → CLI.
+- `integrations/mcp_server.rs`: every tool forwards to the socket when the GUI is up; otherwise `OFFLINE_TOOLS` answer
+  read-only and the rest ask for `launch_gui`. Tool list grew to 32.
+- Late-window catch-up: `ActiveRun.webapp_ready` + `ProcessInfo.ready`; `useTauriEvents` seeds `ports`/`webappReady` from
+  `app_process_info` for active runs, so a window opened after a webapp was already serving does not wait forever.
+- Tests: `tests/e2e/control.sh` (run by `runner.sh` on `CONTROL_NOW`, results read back by run.js via `read_text_file`).

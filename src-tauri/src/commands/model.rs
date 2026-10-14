@@ -26,19 +26,26 @@ pub async fn draft_manifest(state: St<'_>, path: String) -> Result<DraftResult> 
 /// Validate, write `<path>/homemade.toml`, then import (upsert + watcher + app://changed).
 #[tauri::command]
 pub async fn apply_manifest(state: St<'_>, path: String, toml: String) -> Result<AppRecord> {
-    let m = HomemadeManifest::parse(&toml).map_err(|e| crate::error::Error::Msg(format!("Invalid homemade.toml: {e}")))?;
+    apply_manifest_inner(state.inner(), &path, &toml).await
+}
+
+pub async fn apply_manifest_inner(state: &std::sync::Arc<crate::state::AppState>, path: &str, toml: &str) -> Result<AppRecord> {
+    let m = HomemadeManifest::parse(toml).map_err(|e| crate::error::Error::Msg(format!("Invalid homemade.toml: {e}")))?;
     let errs = draft::validate(&m);
     if !errs.is_empty() { return err(format!("Invalid homemade.toml: {}", errs.join("; "))); }
-    let root = folder_of(&path)?;
-    std::fs::write(root.join("homemade.toml"), &toml)?;
-    let rec = super::apps::import_path(state.inner(), &super::resources_dir(&state.app_handle), &root.to_string_lossy()).await?;
+    let root = folder_of(path)?;
+    std::fs::write(root.join("homemade.toml"), toml)?;
+    let rec = super::apps::import_path(state, &super::resources_dir(&state.app_handle), &root.to_string_lossy()).await?;
     state.emit("app://changed", serde_json::json!({ "appId": rec.id }));
     Ok(rec)
 }
 
 /// Explain a run from its live log or stored log_tail.
 #[tauri::command]
-pub async fn explain_run(state: St<'_>, run_id: String) -> Result<SemanticHealthReport> {
+pub async fn explain_run(state: St<'_>, run_id: String) -> Result<SemanticHealthReport> { explain_run_inner(&state, &run_id).await }
+
+pub async fn explain_run_inner(state: &crate::state::AppState, run_id: &str) -> Result<SemanticHealthReport> {
+    let run_id = run_id.to_string();
     let lines: Vec<String> = if let Some(r) = state.active_runs.get(&run_id) {
         r.log.lock().unwrap().iter().cloned().collect()
     } else {
