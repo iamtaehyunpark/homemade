@@ -1,4 +1,6 @@
 // window.__hm: test/automation API used by the HOMEMADE_E2E harness (CONTRACT.md "Gap-closing pass"). Harmless in production.
+import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
+import { emit } from "@tauri-apps/api/event";
 import { ipc, events, on } from "./ipc";
 import { useStore } from "../state/store";
 import { useLive } from "../state/live";
@@ -76,6 +78,9 @@ export function installTestApi() {
     sandboxEval,
     termText,
     report: (msg: unknown) => ipc.e2eReport(typeof msg === "string" ? msg : JSON.stringify(msg)),
+    emit,
+    windows: () => getAllWebviewWindows().then((ws) => ws.map((w) => w.label)),
+    closeWindow: (label: string) => WebviewWindow.getByLabel(label).then((w) => w?.close()),
     done: (code: number) => ipc.e2eDone(code),
   };
 }

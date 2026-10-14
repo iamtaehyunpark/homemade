@@ -4,6 +4,7 @@ import type { DockviewApi, DockviewPanelApi } from "dockview";
 import { ipc } from "../lib/ipc";
 import type { PresetRecord } from "../lib/types";
 import { useStore, latestRun } from "../state/store";
+import { useLive } from "../state/live";
 import { errMsg, fmtMb, isActive } from "../lib/format";
 import { defaultValues, validate } from "../lib/form";
 import { Badge, Btn, Dropdown, MenuItem, Modal, PromptModal } from "./ui";
@@ -11,12 +12,14 @@ import AutoForm from "./AutoForm";
 import AppSandbox from "./AppSandbox";
 import WebappFrame from "./WebappFrame";
 import Underbar from "./Underbar";
+import { openAppWindow, dockAppWindow } from "../lib/appWindow";
 
 const isMac = navigator.platform.toLowerCase().includes("mac");
 const agentId = (appId: string) => `agent:${appId}`;
 
-/** `api`/`containerApi` are absent when rendered standalone in its own window (default_layout = "window"). */
-export default function AppPanel({ appId, api, containerApi }: { appId: string; api?: DockviewPanelApi; containerApi?: DockviewApi }) {
+/** `api`/`containerApi` are absent when rendered standalone in its own window. `solo` = dedicated window: just the program
+ * (web UI, custom UI or form), no header, tabs or Underbar — it should feel like one program running on its own. */
+export default function AppPanel({ appId, api, containerApi, solo }: { appId: string; api?: DockviewPanelApi; containerApi?: DockviewApi; solo?: boolean }) {
   const app = useStore((s) => s.apps.find((a) => a.id === appId));
   const run = useStore((s) => latestRun(s.runs, appId));
   const queuedTick = useStore((s) => s.resources?.queue.find((q) => q.runId === run?.id));
@@ -51,6 +54,12 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
   }, [appId]);
 
   const errors = useMemo(() => (manifest ? validate(manifest, values) : {}), [manifest, values]);
+  const autoStarted = useRef(false);
+  useEffect(() => { // solo window of a web app: the window *is* the program, so bring the server up without asking
+    if (!solo || !app || app.executionMode !== "webapp" || autoStarted.current || isActive(run?.status)) return;
+    autoStarted.current = true;
+    ipc.startRun(appId, values).then((r) => useStore.getState().upsertRun(r)).catch((e) => notify(`Run failed: ${errMsg(e)}`));
+  }, [solo, app?.id, app?.executionMode, run?.status]);
   if (!app || !manifest) return <div className="p-4 text-muted">Loading app…</div>;
 
   const active = isActive(run?.status);
@@ -77,8 +86,11 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
   };
 
   return (
-    <div data-app-panel={appId} tabIndex={-1} className="flex h-full flex-col bg-panel outline-none" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); active ? stop() : start(); } }}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+    <div data-app-panel={appId} data-solo={solo ? "1" : undefined} tabIndex={-1} className="flex h-full flex-col bg-panel outline-none" onKeyDown={(e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); active ? stop() : start(); }
+      if (solo && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); dockAppWindow(appId); }
+    }}>
+      {!solo && <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
         <h1 className="mr-1 truncate text-[14px] font-semibold" title={app.rootDir}>{app.name}</h1>
         <Badge color="accent">{app.executionMode.replace("_", " ")}</Badge>
         {manifest.resources.requires_gpu && <Badge color="amber">GPU</Badge>}
@@ -108,12 +120,13 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
             <MenuEntry testid="copy-cli" close={close} onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</MenuEntry>
             <MenuEntry testid="draft-manifest" close={close} onClick={() => useStore.getState().setDraftPath(app.rootDir)} title="Draft a homemade.toml with the local model">✨ Draft manifest</MenuEntry>
             {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={toggleAgent}>{agentOpen ? "Close agent" : "Edit with Agent"}</MenuEntry>}
+            {containerApi && <MenuEntry testid="open-in-window" close={close} onClick={() => { openAppWindow(app); useStore.getState().closeApp(app.id); }} title="Move this app to its own window (just the program, no panels). ⌘⇧D there brings it back.">Open in new window</MenuEntry>}
             <MenuEntry testid="reveal-app" close={close} onClick={() => ipc.revealInFinder(app.rootDir).catch((e) => notify(errMsg(e)))}>Reveal in Finder</MenuEntry>
             <div className="my-1 border-t border-line" />
             <MenuEntry testid="remove-app" close={close} danger onClick={() => setRemoving(true)} title="Remove app from Homemade">Remove…</MenuEntry>
           </>)}
         </MoreMenu>
-      </header>
+      </header>}
       {run?.status === "queued_vram" && (
         <div data-testid="queue-banner" className="flex items-center gap-3 border-b border-warn/30 bg-warn/10 px-3 py-1.5 text-warn">
           <span>Waiting for {fmtMb(queued?.requiredVramMb ?? manifest.resources.vram_estimate_mb ?? 0)} GPU memory{queued?.reason ? ` — ${queued.reason}` : ""}</span>
@@ -123,17 +136,45 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
       )}
       <div className="flex min-h-0 flex-1 flex-col">
         {app.executionMode === "webapp"
-          ? <div className="min-h-0 flex-1"><WebappFrame app={app} run={run ?? undefined} port={active ? port : undefined} ready={webappReady} /></div>
+          ? <div className="min-h-0 flex-1"><WebappFrame app={app} run={run ?? undefined} port={active ? port : undefined} ready={webappReady} chrome={!solo} /></div>
           : app.hasCustomUi
           ? <div className="min-h-0 flex-1"><AppSandbox app={app} /></div>
           : <div className="min-h-0 flex-1 overflow-y-auto"><AutoForm manifest={manifest} values={values} onChange={setValues} errors={touched ? errors : {}} /></div>}
       </div>
-      <Underbar app={app} latest={run} viewRunId={viewRunId} onViewRun={setViewRunId} values={values} />
+      {solo
+        ? (app.executionMode !== "webapp" && !app.hasCustomUi && (
+          <footer data-testid="solo-footer" className="flex items-center gap-3 border-t border-line px-3 py-2">
+            <SoloStatus run={run} />
+            <div className="flex-1" />
+            {active
+              ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
+              : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting} title="⌘↵">▶ Run</Btn>}
+          </footer>))
+        : <Underbar app={app} latest={run} viewRunId={viewRunId} onViewRun={setViewRunId} values={values} />}
       {savingPreset && <PromptModal title="Save preset" label="Preset name" onClose={() => setSavingPreset(false)}
         onOk={(n) => ipc.savePreset(appId, n, values).then(loadPresets).catch((e) => notify(errMsg(e)))} />}
       {removing && <RemoveAppModal appId={appId} name={app.name} onClose={() => setRemoving(false)} />}
     </div>
   );
+}
+
+/** One line of state for a solo form window: progress while running, exit/artifact summary after. */
+function SoloStatus({ run }: { run?: ReturnType<typeof latestRun> }) {
+  const prog = useLive((s) => (run ? s.runs[run.id]?.progress : undefined));
+  const arts = useStore((s) => (run ? s.artifactTick[run.appId] : 0));
+  const [count, setCount] = useState(0);
+  useEffect(() => { if (run && !isActive(run.status)) ipc.listArtifacts(run.appId, run.id).then((a) => setCount(a.length)).catch(() => {}); }, [run?.id, run?.status, arts]);
+  if (!run) return <span className="text-muted">Fill in the form and press Run</span>;
+  if (isActive(run.status)) return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="h-1.5 w-40 overflow-hidden rounded bg-panel-2"><div className="h-full bg-accent transition-all" style={{ width: `${prog?.percent ?? 5}%` }} /></div>
+      <span className="truncate text-muted">{prog?.message ?? "Running…"}</span>
+    </div>);
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Badge color={run.status === "success" ? "green" : "red"}>{run.status}</Badge>
+      {count > 0 && <button className="text-accent hover:underline" onClick={() => { ipc.listArtifacts(run.appId, run.id).then((a) => a[0] && ipc.revealInFinder(a[0].filePath)).catch(() => {}); }}>{count} output{count > 1 ? "s" : ""} · Reveal</button>}
+    </div>);
 }
 
 function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string; onClose: () => void }) {

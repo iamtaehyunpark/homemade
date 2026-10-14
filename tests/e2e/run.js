@@ -399,6 +399,26 @@ await t("local model: failed run gets an explanation (run://health) and Explain 
   ok(ex && ex.message && ex.message.length > 10, "explainRun returned nothing");
 });
 
+await t("dedicated window: Open in new window pops the app out, dock event brings it back", async () => {
+  const a = apps["hello-cli"];
+  await H.openApp(a.id);
+  const label = "app-" + a.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const panel = `[data-app-panel="${a.id}"] `;
+  H.click(panel + '[data-testid="app-more"]');
+  H.click(panel + '[data-testid="open-in-window"]');
+  await H.waitFor(async () => (await H.windows()).includes(label), 15000);
+  await H.waitFor(() => !H.store.getState().openApps.includes(a.id), 5000);
+  ok(!q(panel), "tab still open in main window after pop-out");
+  // Sidebar click while the window exists must focus the window, not open a second copy as a tab.
+  H.store.getState().openApp(a.id);
+  await sleep(500);
+  ok(!H.store.getState().openApps.includes(a.id), "re-open created a tab while the window was open");
+  await H.emit("app://dock", { appId: a.id });
+  await H.waitFor(() => H.store.getState().openApps.includes(a.id) && q(panel), 5000);
+  await H.closeWindow(label);
+  await H.waitFor(async () => !(await H.windows()).includes(label), 10000);
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DockviewReact, themeDark, themeLight, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview";
 import { useStore } from "../state/store";
-import { openAppWindow } from "../lib/appWindow";
+import { openAppWindow, forceTab, inWindow } from "../lib/appWindow";
 import AppPanel from "./AppPanel";
 import AgentTerminal from "./AgentTerminal";
 import { useTheme } from "../lib/theme";
@@ -63,7 +63,7 @@ export default function Workbench() {
       if (api.getPanel(appPanelId(id))) continue;
       const app = apps.find((a) => a.id === id);
       const layout = app?.manifest.ui.default_layout ?? "tab";
-      if (layout === "window" && app) { toWindow.push(id); openAppWindow(app); continue; }
+      if (app && (inWindow.has(id) || (layout === "window" && !forceTab.has(id)))) { toWindow.push(id); openAppWindow(app); continue; }
       const ref = api.activePanel;
       api.addPanel({
         id: appPanelId(id), component: "app", title: app?.name ?? id, params: { appId: id },

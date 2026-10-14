@@ -12,7 +12,7 @@ const Placeholder = ({ children, spinning, testPhase }: { children: React.ReactN
   </div>
 );
 
-export default function WebappFrame({ app, run, port, ready }: { app: AppRecord; run: RunRecord | undefined; port: number | undefined; ready: boolean }) {
+export default function WebappFrame({ app, run, port, ready, chrome = true }: { app: AppRecord; run: RunRecord | undefined; port: number | undefined; ready: boolean; chrome?: boolean }) {
   const [nonce, setNonce] = useState(0);
   useEffect(() => { setNonce((n) => n + 1); }, [port, run?.id, ready]);
   const active = isActive(run?.status);
@@ -29,11 +29,11 @@ export default function WebappFrame({ app, run, port, ready }: { app: AppRecord;
   }
   return (
     <div data-testid="webapp-frame" data-port={String(port)} data-phase="ready" className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-line px-2 py-0.5 text-[11px] text-muted">
+      {chrome && <div className="flex items-center gap-2 border-b border-line px-2 py-0.5 text-[11px] text-muted">
         <span className="font-mono">{src}</span>
         <div className="flex-1" />
         <button data-testid="webapp-reload" className="hover:text-fg" onClick={() => setNonce((n) => n + 1)} title="Reload">↻</button>
-      </div>
+      </div>}
       <iframe key={nonce} src={src} title={app.name} className="min-h-0 flex-1 border-0 bg-white" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" />
     </div>
   );

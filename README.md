@@ -29,6 +29,10 @@ Runs one registered app end to end and prints the status, log tail and artifacts
 
 `HOMEMADE_HOME=<dir>` overrides `~/.homemade` (separate profiles, tests).
 
+## Dedicated windows
+
+Any app can run as if it were a program of its own: open it and choose **⋯ → Open in new window**. That window contains only the program (its web UI, custom UI, or input form with a Run button), with no sidebar, header, or Underbar. Web apps start their server as soon as the window opens. Press **⌘⇧D** in the window to bring the app back into the main window as a tab, or just close it. Logs, runs and git stay available in the main window. To make an app always open this way, set `default_layout = "window"` under `[ui]` in its `homemade.toml`.
+
 ## Local model (macOS 26+)
 
 Homemade uses Apple's on-device Foundation Model (the one behind Apple Intelligence) through a 60 KB helper. Nothing is downloaded and nothing runs while idle. It powers:

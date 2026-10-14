@@ -16,7 +16,7 @@ import DraftManifestModal from "./components/DraftManifestModal";
 const params = new URLSearchParams(window.location.search);
 const standaloneAppId = params.get("app");
 
-/** default_layout = "window": a single AppPanel in its own webview window, no sidebar/dock. */
+/** Dedicated window: just the program (web UI / custom UI / form) — no sidebar, dock, header or Underbar. */
 function StandaloneApp({ appId }: { appId: string }) {
   useTauriEvents();
   useEffect(() => startDropRouter(), []);
@@ -29,7 +29,7 @@ function StandaloneApp({ appId }: { appId: string }) {
   }, [toast, notify]);
   return (
     <div className="flex h-full flex-col">
-      <div className="min-h-0 flex-1"><AppPanel appId={appId} /></div>
+      <div className="min-h-0 flex-1"><AppPanel appId={appId} solo /></div>
       <DraftManifestModal />
       {toast && <div className="fixed bottom-3 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>}
     </div>

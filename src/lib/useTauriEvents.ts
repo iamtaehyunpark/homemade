@@ -6,6 +6,7 @@ import type { QueuedJobInfo, ArtifactRecord, ResourceSnapshot, RunLineEvent, Run
 import { useStore } from "../state/store";
 import { useLive, type LogLine } from "../state/live";
 import { isTerminal } from "./format";
+import { DOCK_EVENT, forceTab, inWindow } from "./appWindow";
 
 export function useTauriEvents() {
   useEffect(() => {
@@ -42,6 +43,7 @@ export function useTauriEvents() {
       on<number>(events.confirmExit, (n) => st().setConfirmExit(n)),
       on<{ appId: string; message: string }>(events.storageProgress, (p) => st().notify(p.message)),
       on<{ message: string }>(events.notice, (p) => st().notify(p.message)),
+      on<{ appId: string }>(DOCK_EVENT, ({ appId }) => { inWindow.delete(appId); forceTab.add(appId); st().openApp(appId); }),
       on<RunHealthEvent>(events.runHealth, (p) => st().setHealth(p.runId, { severity: p.severity, message: p.message })),
       on<PtySessionSummaryEvent>(events.ptySessionSummary, () => st().bumpSessionSummary()),
       on<ModelStatusEvent>(events.modelStatus, (p) => {

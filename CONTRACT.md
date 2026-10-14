@@ -292,6 +292,14 @@ header, consistent empty states, everything "raw program" related reachable from
   `Edit with Agent` ALSO stays as a visible header button (it is a primary action) — the menu entry is the same handler.
 - Consistent empty states ("No runs yet — press Run", "No outputs for this run", "Not tracked with Git", …) and tooltips on every icon-only button.
 - Keyboard: ⌘1…⌘6 switch Underbar tabs when the panel is focused; ⌘↵ run/stop (exists).
+- Dedicated windows (`src/lib/appWindow.ts`, `AppPanel solo`): `⋯ → Open in new window` (`open-in-window`) moves the app to its own
+  webview window (label `app-<id>`). The window is *just the program*: web UI / custom UI / form, no header, tabs or Underbar
+  (`data-solo="1"`). A webapp auto-starts its server on open; a form app gets a one-line footer (`solo-footer`) with progress/status
+  and Run/Stop; the webapp URL bar is hidden (`WebappFrame chrome={false}`). ⌘⇧D in the window emits `app://dock {appId}` and closes it;
+  the main window re-opens the app as a tab on that event even if the manifest says `default_layout = "window"` (`forceTab`). While a
+  window exists (`inWindow`), opening the app from the sidebar focuses the window instead of adding a tab. Capability
+  `core:window:allow-set-focus` is required. `window.__hm` gained `emit`, `windows()`, `closeWindow(label)`. `runner.sh` now rebuilds the
+  venv fixture and runs `orphan.sh` itself.
 
 ### Backend additions (lead)
 - `GitLogEntry` gains `parents: string[]`, `refs: string[]` (decorations, e.g. ["HEAD -> main", "main"] split into ["HEAD", "main"]), `author: string`.
