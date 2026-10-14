@@ -1,9 +1,9 @@
 // Full-pane resource monitor: 5-minute history graphs for CPU / RAM / GPU memory, per-run usage table
 // with per-run sparklines, and the VRAM admission queue. Data comes from resources://tick (1 Hz) kept in
 // useStore.resourceHistory; no charting library, plain SVG.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore, HISTORY_TICKS } from "../state/store";
-import type { ResourceSnapshot, RunResourceUsage } from "../lib/types";
+import type { ListeningPort, RunResourceUsage } from "../lib/types";
 import { fmtMb, errMsg } from "../lib/format";
 import { ipc } from "../lib/ipc";
 import { Btn } from "./ui";
@@ -49,7 +49,16 @@ export default function Monitor() {
   const openApp = useStore((s) => s.openApp);
   const notify = useStore((s) => s.notify);
   const [stopping, setStopping] = useState<string | null>(null);
+  const [ports, setPorts] = useState<ListeningPort[] | null>(null);
+  const [killing, setKilling] = useState<number | null>(null);
   const name = (id: string) => apps.find((a) => a.id === id)?.name ?? id;
+  const refreshPorts = () => ipc.listListeningPorts().then(setPorts).catch(() => setPorts([]));
+  useEffect(() => { refreshPorts(); const t = setInterval(refreshPorts, 3000); return () => clearInterval(t); }, []);
+  const killPort = async (p: ListeningPort) => {
+    setKilling(p.pid);
+    try { await ipc.killPortOwner(p.pid); notify(`Stopped ${p.command} (pid ${p.pid}) on port ${p.port}`); } catch (e) { notify(errMsg(e)); }
+    setKilling(null); refreshPorts();
+  };
 
   const cpu = useMemo(() => hist.map((x) => x.cpuPct), [hist]);
   const ram = useMemo(() => hist.map((x) => x.ramUsedMb), [hist]);
@@ -124,6 +133,31 @@ export default function Monitor() {
         ))}
         {!r.queue.length && <div className="px-3 py-2 text-[12px] text-gray-500">Queue is empty.</div>}
       </div>
+
+      <h2 className="mb-1 mt-5 text-[12px] font-semibold uppercase tracking-wider text-gray-400">Listening ports</h2>
+      <p className="mb-1 text-[11px] text-gray-500">Every TCP port in LISTEN state on this machine. Rows attributed to a Homemade run can be stopped here; an attributed row whose run is not active is an orphan.</p>
+      <table data-testid="monitor-ports" className="w-full border-collapse text-[12px]">
+        <thead><tr className="text-left text-[10px] uppercase tracking-wider text-gray-500">
+          <th className="py-1 pr-2 font-medium">Port</th><th className="py-1 pr-2 font-medium">PID</th><th className="py-1 pr-2 font-medium">Command</th><th className="py-1 pr-2 font-medium">Homemade run</th><th />
+        </tr></thead>
+        <tbody>
+          {(ports ?? []).map((p) => (
+            <tr key={`${p.pid}:${p.port}`} data-testid="monitor-port" data-port={p.port} data-run={p.runId ?? ""} className="border-t border-line hover:bg-white/5">
+              <td className="py-1 pr-2 font-mono">{p.port}</td>
+              <td className="py-1 pr-2 font-mono text-gray-400">{p.pid}</td>
+              <td className="py-1 pr-2 truncate">{p.command}</td>
+              <td className="py-1 pr-2">
+                {p.appId
+                  ? <span className={p.active ? "text-emerald-300" : "text-amber-300"}>{name(p.appId)} · {p.active ? "active" : "orphan"}</span>
+                  : <span className="text-gray-600">–</span>}
+              </td>
+              <td className="py-1 text-right">{p.runId && <Btn variant="danger" disabled={killing === p.pid} onClick={() => killPort(p)}>{p.active ? "Stop" : "Kill orphan"}</Btn>}</td>
+            </tr>
+          ))}
+          {ports === null && <tr><td colSpan={5} className="py-3 text-gray-500">Scanning…</td></tr>}
+          {ports && !ports.length && <tr><td colSpan={5} className="py-3 text-gray-500">Nothing is listening.</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }

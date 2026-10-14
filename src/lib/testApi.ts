@@ -4,12 +4,13 @@ import { useStore } from "../state/store";
 import { useLive } from "../state/live";
 import { sandboxes, terminals } from "./registry";
 
-function waitFor<T>(fn: () => T, timeoutMs = 10000): Promise<NonNullable<T>> {
+/** Polls `fn` (sync or async) every 100 ms until it yields a truthy value. */
+function waitFor<T>(fn: () => T | Promise<T>, timeoutMs = 10000): Promise<NonNullable<T>> {
   const t0 = Date.now();
   return new Promise((resolve, reject) => {
-    const tick = () => {
+    const tick = async () => {
       let v: T | undefined;
-      try { v = fn(); } catch { v = undefined; }
+      try { v = await fn(); } catch { v = undefined; }
       if (v) return resolve(v as NonNullable<T>);
       if (Date.now() - t0 > timeoutMs) return reject(new Error(`waitFor timed out after ${timeoutMs}ms: ${fn.toString().slice(0, 120)}`));
       setTimeout(tick, 100);

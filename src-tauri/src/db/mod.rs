@@ -82,5 +82,10 @@ pub fn open(path: &Path) -> Result<Connection> {
     }
     let conn = Connection::open(path)?;
     conn.execute_batch(DDL)?;
+    // Additive migrations: process group + announced port per run, so orphans from a previous
+    // session can be found and reaped, and ports can be attributed to runs.
+    for col in ["pgid INTEGER", "port INTEGER"] {
+        let _ = conn.execute(&format!("ALTER TABLE runs ADD COLUMN {col}"), []);
+    }
     Ok(conn)
 }

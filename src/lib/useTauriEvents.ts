@@ -41,6 +41,7 @@ export function useTauriEvents() {
       on<{ appId: string }>(events.appChanged, ({ appId }) => { ipc.getApp(appId).then(st().upsertApp).catch(() => {}); }),
       on<number>(events.confirmExit, (n) => st().setConfirmExit(n)),
       on<{ appId: string; message: string }>(events.storageProgress, (p) => st().notify(p.message)),
+      on<{ message: string }>(events.notice, (p) => st().notify(p.message)),
     ];
     for (const s of subs) s.then((u) => (disposed ? u() : unlisten.push(u))).catch(() => {});
 

@@ -57,6 +57,8 @@ export const ipc = {
   // system
   activeCount: () => invoke<number>("active_count"),
   confirmQuit: () => invoke<void>("confirm_quit"),
+  listListeningPorts: () => invoke<T.ListeningPort[]>("list_listening_ports"),
+  killPortOwner: (pid: number) => invoke<void>("kill_port_owner", { pid }),
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
   homemadeHome: () => invoke<string>("homemade_home"),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
@@ -69,7 +71,7 @@ export const events = {
   runStdout: "run://stdout", runStderr: "run://stderr", runProgress: "run://progress", runMetric: "run://metric",
   runArtifact: "run://artifact", runPort: "run://port", runWebappReady: "run://webapp_ready", runStatus: "run://status", runQueued: "run://queued", runWorkerReady: "run://worker_ready",
   ptyData: "pty://data", ptyExit: "pty://exit",
-  appChanged: "app://changed", appUiReload: "app://ui_reload", confirmExit: "app://confirm-exit",
+  appChanged: "app://changed", appUiReload: "app://ui_reload", confirmExit: "app://confirm-exit", notice: "app://notice",
   resourcesTick: "resources://tick", storageProgress: "storage://progress",
 } as const;
 

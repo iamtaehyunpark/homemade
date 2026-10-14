@@ -102,6 +102,7 @@ fn handle_directive(state: &Arc<AppState>, run: &Arc<ActiveRun>, rest: &str) -> 
         "port" => {
             let Ok(port) = arg.trim().parse::<u16>() else { return false };
             *run.port.lock().unwrap() = Some(port);
+            { let c = state.db.lock().unwrap(); let _ = crate::db::queries::set_run_port(&c, &run.run_id, port); }
             state.emit("run://port", json!({ "runId": run.run_id, "port": port }));
             // Apps often print the port before they are listening; probe until a TCP connect succeeds
             // so the UI can show a loading state instead of a blank (connection-refused) iframe.

@@ -44,3 +44,65 @@ pub async fn e2e_done(state: St<'_>, code: i32) -> Result<()> {
     state.app_handle.exit(code);
     Ok(())
 }
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ListeningPort {
+    pub port: u16,
+    pub pid: i32,
+    pub command: String,
+    /// Set when the process belongs to a process group Homemade launched (this or a previous session).
+    pub run_id: Option<String>,
+    pub app_id: Option<String>,
+    /// True when that run is active right now (so it is expected, not an orphan).
+    pub active: bool,
+}
+
+/// Every TCP port in LISTEN state on this machine (via `lsof -nP -iTCP -sTCP:LISTEN`), attributed to
+/// Homemade runs by process group. Lets the Monitor answer "who is holding port 8765?".
+#[tauri::command]
+pub async fn list_listening_ports(state: St<'_>) -> Result<Vec<ListeningPort>> {
+    let out = tokio::process::Command::new("lsof").args(["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcn"]).output().await?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let known: Vec<(i32, String, String)> = { let c = state.db.lock().unwrap(); crate::db::queries::list_run_pgids(&c).unwrap_or_default() };
+    let active: std::collections::HashSet<String> = state.active_runs.iter().map(|e| e.key().clone()).collect();
+    let (mut pid, mut cmd) = (0i32, String::new());
+    let mut seen = std::collections::HashSet::new();
+    let mut res = vec![];
+    for line in text.lines() {
+        let (k, v) = line.split_at(1);
+        match k {
+            "p" => { pid = v.parse().unwrap_or(0); cmd.clear(); }
+            "c" => cmd = v.to_string(),
+            "n" => {
+                let Some(port) = v.rsplit(':').next().and_then(|p| p.parse::<u16>().ok()) else { continue };
+                if !seen.insert((pid, port)) { continue; }
+                let pg = unsafe { libc::getpgid(pid) };
+                let hit = known.iter().find(|(g, _, _)| *g == pg || *g == pid);
+                res.push(ListeningPort {
+                    port, pid, command: cmd.clone(),
+                    run_id: hit.map(|h| h.1.clone()), app_id: hit.map(|h| h.2.clone()),
+                    active: hit.map(|h| active.contains(&h.1)).unwrap_or(false),
+                });
+            }
+            _ => {}
+        }
+    }
+    res.sort_by_key(|p| p.port);
+    Ok(res)
+}
+
+/// Kill the process group holding a port, but only if Homemade launched it (its pgid matches a recorded run).
+#[tauri::command]
+pub async fn kill_port_owner(state: St<'_>, pid: i32) -> Result<()> {
+    let pg = unsafe { libc::getpgid(pid) };
+    let known = { let c = state.db.lock().unwrap(); crate::db::queries::list_run_pgids(&c).unwrap_or_default() };
+    let Some((_, run_id, _)) = known.into_iter().find(|(g, _, _)| *g == pg || *g == pid) else {
+        return crate::error::err(format!("Process {pid} was not started by Homemade; stop it yourself (e.g. `kill {pid}`)."));
+    };
+    if state.active_runs.contains_key(&run_id) {
+        return crate::supervisor::spawner::stop_run(state.inner().clone(), &run_id).await;
+    }
+    crate::supervisor::reaper::terminate_process_group(if pg > 1 { pg } else { pid }, 1000, 2000).await;
+    Ok(())
+}

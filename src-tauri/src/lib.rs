@@ -37,6 +37,22 @@ pub fn run() {
             });
             app.manage(state.clone());
 
+            // Reap anything a previous session left running (e.g. after a crash or a forced quit), then tell the UI.
+            {
+                let st = state.clone();
+                tauri::async_runtime::spawn(async move {
+                    let (reaped, recorded) = supervisor::reaper::reap_orphans(&st).await;
+                    if recorded > 0 {
+                        tokio::time::sleep(std::time::Duration::from_millis(1500)).await; // let the webview subscribe
+                        let msg = if reaped > 0 {
+                            format!("Stopped {reaped} program{} left running by the previous session", if reaped == 1 { "" } else { "s" })
+                        } else {
+                            format!("Marked {recorded} run{} from the previous session as killed", if recorded == 1 { "" } else { "s" })
+                        };
+                        st.emit("app://notice", serde_json::json!({ "message": msg }));
+                    }
+                });
+            }
             // Background: telemetry + scheduler tick, file watchers for registered apps, skill install (best effort).
             supervisor::telemetry::start(state.clone());
             {
@@ -131,8 +147,30 @@ pub fn run() {
             commands::pty::pty_spawn, commands::pty::pty_write, commands::pty::pty_resize, commands::pty::pty_kill, commands::pty::list_ptys,
             commands::agents::detect_agents, commands::agents::list_agent_sessions, commands::agents::install_skill,
             commands::git::git_status, commands::git::git_init, commands::git::git_checkpoint, commands::git::git_revert_to,
-            commands::system::active_count, commands::system::confirm_quit, commands::system::reveal_in_finder, commands::system::homemade_home, commands::system::read_text_file, commands::system::e2e_report, commands::system::e2e_done,
+            commands::system::active_count, commands::system::confirm_quit, commands::system::list_listening_ports, commands::system::kill_port_owner, commands::system::reveal_in_finder, commands::system::homemade_home, commands::system::read_text_file, commands::system::e2e_report, commands::system::e2e_done,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Homemade");
+        .build(tauri::generate_context!())
+        .expect("error while building Homemade")
+        .run(|app, event| match event {
+            // Cmd+Q / Quit menu / last window closed: same guard as the window close button.
+            // `code` is Some only for programmatic `app.exit(code)` (confirm_quit), which must pass.
+            tauri::RunEvent::ExitRequested { api, code, .. } if code.is_none() => {
+                let st = app.state::<Arc<AppState>>();
+                let n = st.active_count();
+                if n > 0 {
+                    api.prevent_exit();
+                    use tauri::Emitter;
+                    let _ = app.emit("app://confirm-exit", n);
+                    if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
+                }
+            }
+            // Safety net: whatever is still alive at the very end gets SIGKILLed so no orphan keeps a port.
+            tauri::RunEvent::Exit => {
+                let st = app.state::<Arc<AppState>>();
+                supervisor::reaper::kill_all_now(&st);
+                let ptys: Vec<String> = st.active_ptys.iter().map(|e| e.key().clone()).collect();
+                for id in ptys { let _ = supervisor::pty_manager::kill(&st, &id); }
+            }
+            _ => {}
+        });
 }

@@ -186,6 +186,7 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     {
         let c = state.db.lock().unwrap();
         let _ = queries::set_run_status(&c, &job.run_id, "running");
+        let _ = queries::set_run_pgid(&c, &job.run_id, pid);
     }
     emit_status(&state, &job.run_id);
 

@@ -79,6 +79,22 @@ pub fn insert_run(c: &Connection, r: &RunRecord) -> Result<()> {
         params![r.id, r.app_id, r.status, r.inputs_json, r.cli_command, r.exit_code, r.peak_ram_mb, r.peak_vram_mb, r.started_at, r.finished_at, r.log_tail])?;
     Ok(())
 }
+pub fn set_run_pgid(c: &Connection, id: &str, pgid: i32) -> Result<()> {
+    c.execute("UPDATE runs SET pgid = ?2 WHERE id = ?1", params![id, pgid])?; Ok(())
+}
+pub fn set_run_port(c: &Connection, id: &str, port: u16) -> Result<()> {
+    c.execute("UPDATE runs SET port = ?2 WHERE id = ?1", params![id, port as i64])?; Ok(())
+}
+/// Runs a previous session left in a non-terminal state, with their process group (if recorded).
+pub fn list_unfinished_runs(c: &Connection) -> Result<Vec<(String, String, Option<i32>, Option<i64>)>> {
+    let mut st = c.prepare("SELECT id, app_id, pgid, port FROM runs WHERE status IN ('running','stopping','queued_vram')")?;
+    Ok(st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?)
+}
+/// (pgid, run_id, app_id) for every run that ever recorded a process group; used to attribute listening ports.
+pub fn list_run_pgids(c: &Connection) -> Result<Vec<(i32, String, String)>> {
+    let mut st = c.prepare("SELECT pgid, id, app_id FROM runs WHERE pgid IS NOT NULL ORDER BY started_at DESC LIMIT 2000")?;
+    Ok(st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?)
+}
 pub fn set_run_status(c: &Connection, id: &str, status: &str) -> Result<()> {
     c.execute("UPDATE runs SET status = ?2 WHERE id = ?1", params![id, status])?; Ok(())
 }

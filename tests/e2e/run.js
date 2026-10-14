@@ -315,6 +315,37 @@ await t("monitor pane: graphs, per-run table, footer shows current program's CPU
   H.click('[data-testid="monitor-nav"]'); // back to workbench
 });
 
+await t("orphan from previous session is reaped at startup and recorded as killed", async () => {
+  // planted by orphan.sh before launch: detached http server + runs row 'orphan-e2e' (status running, pgid, port)
+  const rec = await H.waitFor(async () => { const r = await H.ipc.getRun("orphan-e2e"); return r && r.status === "killed" ? r : null; }, 15000);
+  ok(/orphaned process group \d+ .*stopped at startup/.test(rec.logTail || ""), "log tail lacks orphan note: " + rec.logTail);
+  const info = JSON.parse(await H.ipc.readTextFile(F + "/orphan.json"));
+  const ports = await H.ipc.listListeningPorts();
+  ok(!ports.some((p) => p.port === info.port), "orphan port " + info.port + " still listening: " + JSON.stringify(ports.filter((p) => p.port === info.port)));
+});
+
+await t("listening ports: webapp run attributed to its run; stop via port table", async () => {
+  const a = apps["webapp-app"];
+  await H.openApp(a.id);
+  const run = await H.ipc.startRun(a.id, {});
+  await H.waitFor(() => { const f = q('[data-testid="webapp-frame"]'); return f && f.dataset.phase === "ready" ? f : null; }, 15000);
+  const port = Number(q('[data-testid="webapp-frame"]').dataset.port);
+  const hit = await H.waitFor(async () => (await H.ipc.listListeningPorts()).find((p) => p.port === port) || null, 10000);
+  ok(hit.runId === run.id && hit.appId === a.id && hit.active, "port not attributed: " + JSON.stringify(hit));
+  H.click('[data-testid="monitor-nav"]');
+  const row = await H.waitFor(() => q('[data-testid="monitor-port"][data-run="' + run.id + '"]'), 10000);
+  ok(row.textContent.includes("active"), "row not marked active: " + row.textContent);
+  await H.ipc.killPortOwner(hit.pid);
+  const fin = await waitRun(run.id, ["killed", "success", "failed"], 15000);
+  ok(fin.status === "killed", "kill via port owner → " + fin.status);
+  await H.waitFor(async () => !(await H.ipc.listListeningPorts()).some((p) => p.port === port), 10000);
+  // a non-Homemade pid must be refused
+  let refused = false;
+  try { await H.ipc.killPortOwner(1); } catch (e) { refused = /not started by Homemade/.test(String(e && e.message || e)); }
+  ok(refused, "killing a foreign pid was not refused");
+  H.click('[data-testid="monitor-nav"]');
+});
+
 await t("close guard: confirm-exit modal appears while a run is active", async () => {
   const a = apps["gpu-app"];
   const r = await H.ipc.startRun(a.id, {});
