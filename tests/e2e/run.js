@@ -160,13 +160,14 @@ await t("venv-app: unmanaged venv scan + dedupe migration + run", async () => {
   const bytes = await H.ipc.scanVenv(a.id);
   ok(bytes > 50 * 1024 * 1024, "scan bytes " + bytes + " (fixture must exceed the 50 MB badge threshold)");
   await H.openApp(a.id);
-  ok(q('[data-testid="venv-dedupe"]'), "no dedupe badge");
+  const badge = () => q('[data-testid="sidebar-app-' + a.id + '"] [data-testid="venv-dedupe"]'); // scoped: other imported apps may have their own badge
+  ok(badge(), "no dedupe badge");
   const after = await H.ipc.migrateVenv(a.id);
   await R("  venv before=" + bytes + " after=" + after);
   const rescan = await H.ipc.scanVenv(a.id);
   ok(rescan === 0, "migrated venv should scan as managed (0), got " + rescan);
   H.store.getState().upsertApp(await H.ipc.getApp(a.id)); // what the Sidebar's Deduplicate button does after migrating
-  await H.waitFor(() => !q('[data-testid="venv-dedupe"]'), 5000);
+  await H.waitFor(() => !badge(), 5000);
   const run = await H.ipc.startRun(a.id, {});
   const fin = await waitRun(run.id, ["success", "failed", "killed"], 60000);
   ok(fin.status === "success" && fin.logTail.includes("six ok"), "post-migration run: " + fin.status + " " + fin.logTail);
@@ -181,6 +182,10 @@ await t("webapp-app: mode=webapp embeds http://127.0.0.1:<port> from @homemade:p
   const el = await H.waitFor(() => { const f = q('[data-testid="webapp-frame"]'); return f && f.dataset.port ? f : null; }, 15000);
   const port = Number(el.dataset.port);
   ok(port > 0, "port not announced");
+  // iframe must only appear once the backend confirmed the port accepts connections (run://webapp_ready)
+  const readyEl = await H.waitFor(() => { const f = q('[data-testid="webapp-frame"]'); return f && f.dataset.phase === "ready" ? f : null; }, 15000);
+  ok(readyEl, "webapp never reached ready phase");
+  ok(H.store.getState().webappReady[run.id] === true, "store webappReady not set");
   const fr = q('[data-testid="webapp-frame"] iframe');
   ok(fr && fr.src === "http://127.0.0.1:" + port + "/", "iframe src " + (fr && fr.src));
   await R("  webapp port=" + port);

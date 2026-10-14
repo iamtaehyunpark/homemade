@@ -128,3 +128,4 @@ RPC request written to worker stdin (A): `{"id":"<uuid>","method":"name","params
 - `max_ram_mb`: header badge `data-testid="ram-limit"`, labelled "(advisory)" on macOS.
 - `venv_scanner::scan_unmanaged_venv` returns 0 for a *managed* venv: one carrying the `.venv/.homemade-managed` marker (written by `migrate_venv`), or a uv-created venv whose `lib/` files are mostly hardlinked (`st_nlink > 1`).
 - Test API: `openApp` refreshes the app row from the backend before opening.
+- Webapp readiness: after `@homemade:port`, the backend TCP-probes 127.0.0.1:<port> (250 ms, up to 5 min, stops if the run ends) and emits `run://webapp_ready {runId, port}`. `WebappFrame` shows a spinner (`data-phase="waiting-port" | "waiting-server"`) and only mounts the iframe at `data-phase="ready"`; `webapp-reload` button re-mounts it.

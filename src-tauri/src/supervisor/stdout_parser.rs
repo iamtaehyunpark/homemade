@@ -103,6 +103,23 @@ fn handle_directive(state: &Arc<AppState>, run: &Arc<ActiveRun>, rest: &str) -> 
             let Ok(port) = arg.trim().parse::<u16>() else { return false };
             *run.port.lock().unwrap() = Some(port);
             state.emit("run://port", json!({ "runId": run.run_id, "port": port }));
+            // Apps often print the port before they are listening; probe until a TCP connect succeeds
+            // so the UI can show a loading state instead of a blank (connection-refused) iframe.
+            let (st, run_id) = (state.clone(), run.run_id.clone());
+            tauri::async_runtime::spawn(async move {
+                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+                let started = std::time::Instant::now();
+                while started.elapsed() < std::time::Duration::from_secs(300) {
+                    if !st.active_runs.contains_key(&run_id) { return; }
+                    let ok = tokio::time::timeout(std::time::Duration::from_millis(500), tokio::net::TcpStream::connect(addr)).await
+                        .map(|r| r.is_ok()).unwrap_or(false);
+                    if ok {
+                        st.emit("run://webapp_ready", json!({ "runId": run_id, "port": port }));
+                        return;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                }
+            });
             true
         }
         "worker_ready" => {

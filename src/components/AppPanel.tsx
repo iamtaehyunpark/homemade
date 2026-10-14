@@ -25,6 +25,7 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
   const queuedEv = useStore((s) => (run ? s.queued[run.id] : undefined));
   const queued = queuedEv ?? queuedTick;
   const port = useStore((s) => (run ? s.ports[run.id] : undefined));
+  const webappReady = useStore((s) => (run ? !!s.webappReady[run.id] : false));
   const notify = useStore((s) => s.notify);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [touched, setTouched] = useState(false);
@@ -121,7 +122,7 @@ export default function AppPanel({ appId, api, containerApi }: { appId: string; 
       )}
       <div className="flex min-h-0 flex-1 flex-col">
         {app.executionMode === "webapp"
-          ? <div className="min-h-0 flex-1"><WebappFrame app={app} run={run ?? undefined} port={active ? port : undefined} /></div>
+          ? <div className="min-h-0 flex-1"><WebappFrame app={app} run={run ?? undefined} port={active ? port : undefined} ready={webappReady} /></div>
           : app.hasCustomUi
           ? <div className="min-h-0 flex-1"><AppSandbox app={app} /></div>
           : <div className="min-h-0 flex-1 overflow-y-auto"><AutoForm manifest={manifest} values={values} onChange={setValues} errors={touched ? errors : {}} /></div>}

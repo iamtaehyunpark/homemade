@@ -14,11 +14,13 @@ interface HomemadeStore {
   toast: string | null;
   queued: Record<string, QueuedJobInfo>; // by run id, from run://queued
   ports: Record<string, number>; // by run id, from run://port (webapp mode)
+  webappReady: Record<string, boolean>; // by run id, from run://webapp_ready (port accepts connections)
   setApps: (apps: AppRecord[]) => void;
   upsertApp: (app: AppRecord) => void;
   removeApp: (appId: string) => void;
   setQueued: (q: QueuedJobInfo) => void;
   setPort: (runId: string, port: number) => void;
+  setWebappReady: (runId: string) => void;
   upsertRun: (run: RunRecord) => void;
   setResources: (r: ResourceSnapshot) => void;
   select: (appId: string | null) => void;
@@ -42,6 +44,7 @@ export const useStore = create<HomemadeStore>((set) => ({
   toast: null,
   queued: {},
   ports: {},
+  webappReady: {},
   setApps: (apps) => set({ apps }),
   upsertApp: (app) => set((s) => {
     const i = s.apps.findIndex((a) => a.id === app.id);
@@ -56,6 +59,7 @@ export const useStore = create<HomemadeStore>((set) => ({
   })),
   setQueued: (q) => set((s) => ({ queued: { ...s.queued, [q.runId]: q } })),
   setPort: (runId, port) => set((s) => ({ ports: { ...s.ports, [runId]: port } })),
+  setWebappReady: (runId) => set((s) => ({ webappReady: { ...s.webappReady, [runId]: true } })),
   upsertRun: (run) => set((s) => ({ runs: { ...s.runs, [run.id]: run } })),
   setResources: (resources) => set({ resources }),
   select: (selectedAppId) => set({ selectedAppId }),
