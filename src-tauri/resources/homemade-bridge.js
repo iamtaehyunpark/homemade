@@ -80,7 +80,7 @@
           post(msg);
         };
         try {
-          Promise.resolve((0, eval)(String(m.code))).then(function (v) { reply(true, v); }, function (e) { reply(false, e); });
+          Promise.resolve((0, eval)('(async () => (' + String(m.code) + '))()')).then(function (v) { reply(true, v); }, function (e) { reply(false, e); });
         } catch (e) { reply(false, e); }
         break;
       }
