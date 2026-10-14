@@ -108,6 +108,7 @@ pub async fn import_path(state: &std::sync::Arc<AppState>, res: &Path, path: &st
         row
     };
     m.app.id = row.id.clone();
+    crate::integrations::agent_docs::ensure(&root, &row.id, &m, &state.home);
     crate::manifest::watcher::watch_app(state.clone(), row.id.clone(), root);
     Ok(to_record(&row, m))
 }
@@ -131,6 +132,7 @@ pub fn reload_manifest_inner(state: &AppState, res: &Path, app_id: &str) -> Resu
     row.execution_mode = m.app.mode.as_str().to_string();
     row.name = m.app.name.clone();
     { let c = state.db.lock().unwrap(); queries::upsert_app(&c, &row)?; }
+    crate::integrations::agent_docs::ensure(Path::new(&row.root_dir), &row.id, &m, &state.home);
     Ok(to_record(&row, m))
 }
 
@@ -144,6 +146,7 @@ pub fn remove_app_inner(state: &AppState, app_id: &str, purge_scratch: bool, del
     let app_id = app_id.to_string();
     let row = { let c = state.db.lock().unwrap(); queries::get_app(&c, &app_id)? };
     crate::manifest::watcher::unwatch_app(&app_id);
+    if let Some(r) = &row { crate::integrations::agent_docs::remove(Path::new(&r.root_dir)); }
     if let Some(row) = &row {
         let root = Path::new(&row.root_dir);
         if purge_scratch && root.is_dir() {

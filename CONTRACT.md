@@ -362,3 +362,6 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
   footer + agent toolbar, ⌘⇧C, Esc): overlay with a pointer shield (so iframes don't swallow events), hover label, click →
   `describe()` builds `[ui: App › area › tab › testid "text" (app id)]` (iframes: web view URL + click offset) and `mention()`
   types it (no Enter) into the app's newest PTY via `pty_write`, else clipboard. Test: "select mode" in run.js.
+- Managed agent docs (`integrations/agent_docs.rs`): `ensure(root, app_id, manifest, home)` on import, manifest reload and
+  agent PTY spawn; `remove(root)` on remove_app. Block between `<!-- homemade:start/end -->` in `CLAUDE.md` + `AGENTS.md`;
+  idempotent, user text preserved, file deleted when only ours. Config `[agents] write_docs` (default true). Unit-tested.

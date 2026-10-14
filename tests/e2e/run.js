@@ -28,6 +28,11 @@ await t("import apps (manifest + inference)", async () => {
   ok(apps["hello-ui"].hasCustomUi, "hello-ui should have custom UI");
   const list = await H.ipc.listApps();
   ok(list.length >= 8, "listApps count " + list.length);
+  // Import writes a managed Homemade block into CLAUDE.md and AGENTS.md so agents started outside Homemade know the launcher.
+  for (const f of ["CLAUDE.md", "AGENTS.md"]) {
+    const md = await H.ipc.readTextFile(F + "/hello-cli/" + f);
+    ok(md.includes("<!-- homemade:start -->") && md.includes("app `hello-cli`") && md.includes("homemade run hello-cli"), f + " lacks the managed block");
+  }
   await R("  app ids: " + list.map((a) => a.id).join(","));
 });
 

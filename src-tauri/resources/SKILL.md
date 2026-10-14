@@ -165,5 +165,8 @@ program's own UI — `capture(app_id)` gives you a screenshot to look at. For de
 `app_processes` (pid tree), `app_usage` (CPU/RAM/GPU over time), `signal_run`, `write_stdin`, and `get_run_log` with `offset`
 to tail incrementally.
 
+If you were started outside Homemade, look for the managed `## Homemade` block in the project's `CLAUDE.md` / `AGENTS.md`:
+it names the app id and points at the CLI shim and the MCP config.
+
 Typical adapt-and-verify loop for an agent: `draft_manifest` → edit → `apply_manifest` → `start_run` + `wait_run` →
 read `log_tail` / `explain_run` → fix the code → `git_checkpoint`.

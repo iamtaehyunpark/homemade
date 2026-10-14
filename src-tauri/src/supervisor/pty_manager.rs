@@ -97,6 +97,10 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
 
     // --- Auto-checkpoint (spec §10E) + provenance before spawn ---
     let is_agent = agent_type != "custom_shell";
+    if is_agent {
+        let res = crate::commands::resources_dir(&state.app_handle);
+        if let Ok((m, _, _)) = crate::manifest::infer::load_or_infer(&root, &res) { crate::integrations::agent_docs::ensure(&root, app_id, &m, &state.home); }
+    }
     let is_git = root.join(".git").exists();
     let auto_ckpt = is_agent && is_git && {
         let cfg = crate::storage::config::load(&state.home);
