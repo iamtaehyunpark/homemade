@@ -347,3 +347,4 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
   Claude Code PTYs get `--mcp-config <home>/mcp.json` + a system-prompt paragraph about driving Homemade; Codex PTYs get
   `-c mcp_servers.homemade.*`; interactive custom shells print `control::hint_line()` first. The shim is now installed for
   every home (test homes included).
+- Agent terminal (`AgentTerminal.tsx`): always dark (`#0b0d10` bg, 16-color palette) regardless of the app theme — ANSI output from agents assumes a black background.

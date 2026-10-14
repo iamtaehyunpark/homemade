@@ -11,9 +11,15 @@ import { terminals } from "../lib/registry";
 import { useStore } from "../state/store";
 import { cssVar, useTheme } from "../lib/theme";
 
+/** The terminal is always dark, whatever the app theme: agents print ANSI colors tuned for black backgrounds, and a
+ * light terminal made bright-white / bright-yellow text unreadable. Classic 16-color palette with high contrast. */
 function xtermTheme() {
-  const accent = cssVar("--color-accent");
-  return { background: cssVar("--color-bg"), foreground: cssVar("--color-fg"), cursor: accent, cursorAccent: cssVar("--color-bg"), selectionBackground: accent + "44" };
+  const accent = cssVar("--color-accent") || "#3b82f6";
+  return {
+    background: "#0b0d10", foreground: "#e6e6e6", cursor: accent, cursorAccent: "#0b0d10", selectionBackground: accent + "66",
+    black: "#1b1f24", red: "#ff5f57", green: "#5af78e", yellow: "#f3f99d", blue: "#57c7ff", magenta: "#ff6ac1", cyan: "#9aedfe", white: "#f1f1f0",
+    brightBlack: "#686868", brightRed: "#ff8a85", brightGreen: "#8dffb1", brightYellow: "#fbffb8", brightBlue: "#8fdaff", brightMagenta: "#ff9bd6", brightCyan: "#c6f5ff", brightWhite: "#ffffff",
+  };
 }
 
 interface Launch { agentType: AgentType; sessionId?: string; n: number }
@@ -138,7 +144,7 @@ export default function AgentTerminal({ appId }: { appId: string }) {
         {!isShell && <Btn disabled={!sessionId} onClick={() => start(true)}>Resume</Btn>}
         {exited && <Btn variant="primary" onClick={() => start(!!sessionId)}>Restart</Btn>}
       </div>
-      <div className="min-h-0 flex-1 p-1.5"><div ref={host} className="h-full w-full" /></div>
+      <div className="min-h-0 flex-1 p-1.5" style={{ background: "#0b0d10" }}><div ref={host} className="h-full w-full" /></div>
     </div>
   );
 }
