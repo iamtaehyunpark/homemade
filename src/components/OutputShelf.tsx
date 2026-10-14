@@ -5,6 +5,21 @@ import type { ArtifactRecord } from "../lib/types";
 import { useStore } from "../state/store";
 import { basename, errMsg, fmtBytes, relTime } from "../lib/format";
 import { Btn, Modal } from "./ui";
+import { startDrag } from "@crabnebula/tauri-plugin-drag";
+
+let dragIconCache: Record<string, string> = {};
+/** Small PNG data URL used as the native drag preview (plugin requires data:image/png;base64). */
+function dragIcon(label: string): string {
+  if (dragIconCache[label]) return dragIconCache[label];
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#1b1f27"; g.fillRect(4, 4, 56, 56);
+  g.strokeStyle = "#6ea8fe"; g.lineWidth = 2; g.strokeRect(4, 4, 56, 56);
+  g.fillStyle = "#e6e6e6"; g.font = "bold 14px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(label.slice(0, 5).toUpperCase(), 32, 32);
+  return (dragIconCache[label] = c.toDataURL("image/png"));
+}
 
 const kindOf = (a: ArtifactRecord) => {
   const m = a.mimeType || "";
@@ -38,18 +53,18 @@ export default function OutputShelf({ appId, runId }: { appId: string; runId: st
   };
 
   return (
-    <div className="shrink-0 border-t border-line bg-panel">
+    <div data-testid="output-shelf" className="shrink-0 border-t border-line bg-panel">
       <div className="flex items-center gap-2 px-3 py-1 text-[11px]">
         <button className="font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-300" onClick={() => setOpen(!open)}>
           {open ? "▾" : "▸"} Outputs <span className="font-normal normal-case text-gray-600">({items.length})</span>
         </button>
         <div className="flex overflow-hidden rounded border border-line">
           {(["latest", "all"] as const).map((s) => (
-            <button key={s} onClick={() => setScope(s)} className={`px-2 ${scope === s ? "bg-accent/15 text-accent" : "text-gray-500 hover:bg-white/5"}`}>{s === "latest" ? "Latest run" : "All"}</button>
+            <button key={s} onClick={() => setScope(s)} className={`px-2 ${scope === s ? "bg-accent/15 text-accent" : "text-gray-500 hover:bg-white/5"}`}>{s === "latest" ? "This run" : "All"}</button>
           ))}
         </div>
         <div className="flex-1" />
-        {scratch > 0 && <Btn className="!py-0 !text-[11px]" onClick={clean}>Clean scratch ({scratch} files)</Btn>}
+        {scratch > 0 && <Btn data-testid="clean-scratch" className="!py-0 !text-[11px]" onClick={clean}>Clean scratch ({scratch} files)</Btn>}
       </div>
       {open && (
         <div className="flex max-h-44 gap-2 overflow-x-auto px-3 pb-2">
@@ -65,8 +80,14 @@ export default function OutputShelf({ appId, runId }: { appId: string; runId: st
 function Tile({ a, onOpen }: { a: ArtifactRecord; onOpen: () => void }) {
   const k = kindOf(a);
   return (
-    <button onClick={onOpen} draggable title={a.filePath}
-      onDragStart={(e) => { e.dataTransfer.setData("text/uri-list", "file://" + a.filePath); e.dataTransfer.setData("text/plain", a.filePath); }}
+    <button data-testid="shelf-item" data-path={a.filePath} onClick={onOpen} draggable title={a.filePath}
+      onDragStart={(e) => {
+        // Native OS drag-out (Finder, other apps) via tauri-plugin-drag; HTML data as a fallback for in-webview drops.
+        e.dataTransfer.setData("text/uri-list", "file://" + a.filePath); e.dataTransfer.setData("text/plain", a.filePath);
+        e.preventDefault();
+        const ext = (a.filePath.split(".").pop() ?? "file");
+        startDrag({ item: [a.filePath], icon: dragIcon(ext) }).catch((err) => console.warn("native drag failed", err));
+      }}
       className="group flex w-28 shrink-0 flex-col overflow-hidden rounded border border-line bg-bg text-left hover:border-accent/60">
       <div className="flex h-20 items-center justify-center overflow-hidden bg-black/30">
         {k === "image" ? <img src={assetUrl(a.filePath)} loading="lazy" className="h-full w-full object-cover" alt="" />

@@ -1,6 +1,6 @@
 // OWNER: agent F. Zustand store synced with Tauri events (see CONTRACT.md for every event).
 import { create } from "zustand";
-import type { AppRecord, RunRecord, ResourceSnapshot } from "../lib/types";
+import type { AppRecord, RunRecord, ResourceSnapshot, QueuedJobInfo } from "../lib/types";
 
 interface HomemadeStore {
   apps: AppRecord[];
@@ -12,8 +12,11 @@ interface HomemadeStore {
   confirmExit: number | null;
   artifactTick: Record<string, number>;
   toast: string | null;
+  queued: Record<string, QueuedJobInfo>; // by run id, from run://queued
   setApps: (apps: AppRecord[]) => void;
   upsertApp: (app: AppRecord) => void;
+  removeApp: (appId: string) => void;
+  setQueued: (q: QueuedJobInfo) => void;
   upsertRun: (run: RunRecord) => void;
   setResources: (r: ResourceSnapshot) => void;
   select: (appId: string | null) => void;
@@ -35,6 +38,7 @@ export const useStore = create<HomemadeStore>((set) => ({
   confirmExit: null,
   artifactTick: {},
   toast: null,
+  queued: {},
   setApps: (apps) => set({ apps }),
   upsertApp: (app) => set((s) => {
     const i = s.apps.findIndex((a) => a.id === app.id);
@@ -42,6 +46,12 @@ export const useStore = create<HomemadeStore>((set) => ({
     if (i >= 0) apps[i] = app; else apps.push(app);
     return { apps };
   }),
+  removeApp: (id) => set((s) => ({
+    apps: s.apps.filter((a) => a.id !== id),
+    openApps: s.openApps.filter((x) => x !== id),
+    selectedAppId: s.selectedAppId === id ? null : s.selectedAppId,
+  })),
+  setQueued: (q) => set((s) => ({ queued: { ...s.queued, [q.runId]: q } })),
   upsertRun: (run) => set((s) => ({ runs: { ...s.runs, [run.id]: run } })),
   setResources: (resources) => set({ resources }),
   select: (selectedAppId) => set({ selectedAppId }),

@@ -7,6 +7,7 @@ import { events, ipc, on } from "../lib/ipc";
 import type { AgentSessionRecord, AgentType, DetectedAgent, PtyDataEvent, PtyExitEvent } from "../lib/types";
 import { errMsg, relTime } from "../lib/format";
 import { Btn } from "./ui";
+import { terminals } from "../lib/registry";
 
 interface Launch { agentType: AgentType; sessionId?: string; n: number }
 
@@ -22,6 +23,13 @@ export default function AgentTerminal({ appId }: { appId: string }) {
   const [sessionId, setSessionId] = useState("");
   const [launch, setLaunch] = useState<Launch | null>(null);
   const [exited, setExited] = useState(false);
+  const [curPty, setCurPty] = useState<string | null>(null);
+  const bindPty = (id: string | null) => {
+    if (ptyId.current) terminals.delete(ptyId.current);
+    ptyId.current = id;
+    if (id && term.current) terminals.set(id, term.current);
+    setCurPty(id);
+  };
 
   // detect agents, then auto-launch the first one
   useEffect(() => {
@@ -58,7 +66,6 @@ export default function AgentTerminal({ appId }: { appId: string }) {
     on<PtyExitEvent>(events.ptyExit, (p) => {
       if (p.ptyId !== ptyId.current) return;
       t.write(`\r\n\x1b[90m[process exited${p.exitCode != null ? ` with code ${p.exitCode}` : ""}]\x1b[0m\r\n`);
-      ptyId.current = null;
       setExited(true);
     }).then((u) => (disposed ? u() : un.push(u)));
 
@@ -69,7 +76,7 @@ export default function AgentTerminal({ appId }: { appId: string }) {
     ro.observe(host.current!);
     return () => {
       disposed = true; un.forEach((u) => u()); ro.disconnect(); sub.dispose();
-      if (ptyId.current) ipc.ptyKill(ptyId.current).catch(() => {});
+      if (ptyId.current) { ipc.ptyKill(ptyId.current).catch(() => {}); terminals.delete(ptyId.current); }
       ptyId.current = null;
       t.dispose();
     };
@@ -81,7 +88,7 @@ export default function AgentTerminal({ appId }: { appId: string }) {
     if (!launch || !t) return;
     let cancelled = false;
     const prev = ptyId.current;
-    ptyId.current = null;
+    bindPty(null);
     if (prev) ipc.ptyKill(prev).catch(() => {});
     t.reset();
     setExited(false);
@@ -89,7 +96,7 @@ export default function AgentTerminal({ appId }: { appId: string }) {
     try { fit.current?.fit(); } catch { /* ignore */ }
     ipc.ptySpawn(appId, launch.agentType, { sessionId: launch.sessionId, cols: t.cols, rows: t.rows }).then((info) => {
       if (cancelled) { ipc.ptyKill(info.ptyId).catch(() => {}); return; }
-      ptyId.current = info.ptyId;
+      bindPty(info.ptyId);
       for (const d of pendingData.current.get(info.ptyId) ?? []) t.write(d);
       pendingData.current.clear();
       t.focus();
@@ -101,21 +108,21 @@ export default function AgentTerminal({ appId }: { appId: string }) {
   const isShell = agentType === "custom_shell";
 
   return (
-    <div className="flex h-full flex-col bg-bg">
+    <div data-testid="agent-terminal" data-pty-id={curPty ?? ""} className="flex h-full flex-col bg-bg">
       <div className="flex flex-wrap items-center gap-1.5 border-b border-line bg-panel px-2 py-1.5">
-        <select className="field" value={agentType} onChange={(e) => { setAgentType(e.target.value as AgentType); setSessionId(""); }}>
+        <select data-testid="terminal-agent-select" className="field" value={agentType} onChange={(e) => { setAgentType(e.target.value as AgentType); setSessionId(""); }}>
           {agents?.map((a) => <option key={a.agentType} value={a.agentType}>{a.displayName}</option>)}
           <option value="custom_shell">Shell</option>
         </select>
         {!isShell && (
-          <select className="field max-w-56" value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
+          <select data-testid="terminal-session-select" className="field max-w-56" value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
             <option value="">New session</option>
             {sessions.filter((s) => s.agentType === agentType).map((s) => (
               <option key={s.sessionId} value={s.sessionId}>{(s.title || s.sessionId.slice(0, 8))} · {relTime(s.updatedAt)}</option>
             ))}
           </select>
         )}
-        <Btn onClick={() => start(false)}>{isShell ? "New shell" : "New session"}</Btn>
+        <Btn data-testid="terminal-new" onClick={() => start(false)}>{isShell ? "New shell" : "New session"}</Btn>
         {!isShell && <Btn disabled={!sessionId} onClick={() => start(true)}>Resume</Btn>}
         {exited && <Btn variant="primary" onClick={() => start(!!sessionId)}>Restart</Btn>}
       </div>

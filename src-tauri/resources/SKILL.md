@@ -17,7 +17,8 @@ renders a form from `[inputs]`, runs the program, streams progress, and shows ou
 
 ## 2. `homemade.toml`
 Place it in the project root. Declare every CLI parameter under `[inputs.<name>]` so Homemade can validate, save presets, and
-build "Copy as CLI" strings. Input `type` ∈ `file | directory | file_list | string | int | float | bool | select | range`.
+build "Copy as CLI" strings. Input `type` ∈ `file | directory | file_list | string | int | float | bool | select | range | args`.
+`type = "args"` is a free-text field whose value is shell-split and appended verbatim (use it for pass-through extra arguments).
 
 ```toml
 [app]
@@ -52,6 +53,13 @@ entry = "ui/index.html"          # omit for an auto-generated form
 [resources]
 requires_gpu = false
 # vram_estimate_mb = 4000        # set with requires_gpu = true for PyTorch/CUDA/Metal
+
+[inputs.extra]
+type = "args"                    # free text, shell-split and appended as-is
+
+[environment]
+secrets = ["OPENAI_API_KEY"]     # pulled from the Homemade keychain vault at run time
+vars = { MODEL_DIR = "$MODELS/whisper" }   # $NAME / ${NAME} expand from [aliases] in ~/.homemade/config.toml, then the login env
 
 [artifacts]
 output_dir = "./outputs"
@@ -109,3 +117,15 @@ if __name__ == "__main__":
 ```
 Call from the UI with `await window.homemade.call("add", { a: 1, b: 2 })`.
 Helpers: `progress(pct, msg)`, `artifact(path)`, `metric(dict)`. Do not run the script with `python -I` (it hides PYTHONPATH).
+
+## 6. MCP server (inspect Homemade state from your agent)
+Homemade's binary doubles as a read-only MCP stdio server. Register it once:
+
+```sh
+claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp
+```
+
+Tools: `list_apps`, `get_app(app_id)` (parsed manifest + root_dir + has_custom_ui), `list_runs(app_id, limit?)`,
+`get_run_log(run_id)`, `last_failed_run(app_id)` (use this first when fixing a broken tool), `list_artifacts(app_id, run_id?)`,
+`validate_manifest(toml_text)` (returns `{ok, errors[], normalized_toml}`; run it after editing `homemade.toml`).
+Runs cannot be started over MCP; the user starts them from the Homemade window.

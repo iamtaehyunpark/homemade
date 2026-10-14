@@ -13,7 +13,7 @@ export default function LogConsole({ runId }: { runId: string | null }) {
   useEffect(() => {
     if (!runId || useLive.getState().runs[runId]?.lines.length) return;
     ipc.getRunLog(runId).then((ls) => {
-      useLive.getState().seed(runId, ls.map((l) => (l.startsWith("[stderr] ") ? { err: true, text: l.slice(9) } : { err: false, text: l })));
+      useLive.getState().seed(runId, ls.map((l) => (l.startsWith("[stderr] ") ? { err: true, text: l.slice(9) } : l.startsWith("[stderr]") ? { err: true, text: l.slice(8) } : { err: false, text: l })));
     }).catch(() => {});
   }, [runId]);
 
@@ -33,7 +33,7 @@ export default function LogConsole({ runId }: { runId: string | null }) {
   };
 
   return (
-    <div className="shrink-0 border-t border-line bg-bg">
+    <div data-testid="log-console" className="shrink-0 border-t border-line bg-bg">
       {open && <div className="h-1 cursor-row-resize hover:bg-accent/40" onMouseDown={startDrag} />}
       <div className="flex items-center gap-2 px-3 py-1 text-[11px]">
         <button className="font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-300" onClick={() => setOpen(!open)}>
@@ -41,7 +41,7 @@ export default function LogConsole({ runId }: { runId: string | null }) {
         </button>
         {live?.progress && (
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="h-1.5 w-40 overflow-hidden rounded bg-white/10"><div className="h-full bg-accent transition-[width]" style={{ width: `${Math.max(0, Math.min(100, live.progress.percent))}%` }} /></div>
+            <div data-testid="progress-bar" data-percent={Math.round(live.progress.percent)} className="h-1.5 w-40 overflow-hidden rounded bg-white/10"><div className="h-full bg-accent transition-[width]" style={{ width: `${Math.max(0, Math.min(100, live.progress.percent))}%` }} /></div>
             <span className="tabular-nums text-gray-400">{Math.round(live.progress.percent)}%</span>
             <span className="truncate text-gray-400">{live.progress.message}</span>
           </div>
@@ -55,7 +55,7 @@ export default function LogConsole({ runId }: { runId: string | null }) {
       {open && (
         <div ref={box} style={{ height }} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}
           className="overflow-y-auto px-3 pb-2 font-mono text-[11.5px] leading-[1.45] select-text">
-          {lines.map((l, i) => <div key={i} className={`whitespace-pre-wrap break-all ${l.err ? "text-red-400" : "text-gray-300"}`}>{l.text || " "}</div>)}
+          {lines.map((l, i) => <div key={i} data-testid="log-line" data-stream={l.err ? "stderr" : "stdout"} className={`whitespace-pre-wrap break-all ${l.err ? "text-red-400" : "text-gray-300"}`}>{l.text || " "}</div>)}
           {!lines.length && <div className="text-gray-600">{runId ? "No output." : "Output appears here when you run the app."}</div>}
         </div>
       )}

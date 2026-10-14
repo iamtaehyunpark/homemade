@@ -7,6 +7,7 @@ import type { AppRecord, RunRecord } from "../lib/types";
 import { useStore, latestRun } from "../state/store";
 import { useDropTarget } from "../lib/dropRouter";
 import { errMsg, isActive, platformName } from "../lib/format";
+import { sandboxes } from "../lib/registry";
 
 type Params = Record<string, unknown>;
 const forwarded: [string, string][] = [
@@ -17,6 +18,8 @@ const forwarded: [string, string][] = [
 export default function AppSandbox({ app }: { app: AppRecord }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [bridgeReady, setBridgeReady] = useState(false);
+  useEffect(() => setBridgeReady(false), [reloadKey]);
   const appRef = useRef(app);
   appRef.current = app;
 
@@ -59,7 +62,11 @@ export default function AppSandbox({ app }: { app: AppRecord }) {
       const m = e.data;
       if (!m || m.homemade !== 1) return;
       if (m.type === "ready") {
-        post({ type: "init", appId, schema: appRef.current.manifest.inputs, platform: platformName() });
+        post({ type: "init", appId, schema: appRef.current.manifest.inputs, platform: platformName(), e2e: true });
+        setBridgeReady(true);
+      } else if (m.type === "e2e_result") {
+        const w = evalWaiters.get(m.id);
+        if (w) { evalWaiters.delete(m.id); m.ok ? w.resolve(m.result) : w.reject(new Error(String(m.error))); }
       } else if (m.type === "rpc") {
         handle(String(m.method), (m.params ?? {}) as Params).then(
           (result) => post({ type: "rpc_result", id: m.id, ok: true, result: result ?? null }),
@@ -67,8 +74,15 @@ export default function AppSandbox({ app }: { app: AppRecord }) {
         );
       }
     };
+    const evalWaiters = new Map<string, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+    let n = 0;
+    sandboxes.set(appId, (code) => new Promise((resolve, reject) => {
+      const id = `e${++n}`;
+      evalWaiters.set(id, { resolve, reject });
+      post({ type: "e2e_eval", id, code });
+    }));
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => { window.removeEventListener("message", onMessage); sandboxes.delete(appId); };
   }, [app.id]);
 
   // Event forwarding for runs of this app
@@ -95,7 +109,7 @@ export default function AppSandbox({ app }: { app: AppRecord }) {
   const running = useStore((s) => isActive(latestRun(s.runs, app.id)?.status));
   return (
     <div ref={dropRef} className="relative h-full w-full bg-white">
-      <iframe key={reloadKey} ref={frame} title={app.name} src={appUiUrl(app.id)} sandbox="allow-scripts allow-forms allow-modals" className="h-full w-full border-0" />
+      <iframe key={reloadKey} ref={frame} data-testid="app-sandbox" data-bridge={bridgeReady ? "ready" : "pending"} title={app.name} src={appUiUrl(app.id)} sandbox="allow-scripts allow-forms allow-modals" className="h-full w-full border-0" />
       {running && <div className="pointer-events-none absolute right-2 top-2 h-2 w-2 animate-pulse rounded-full bg-emerald-400" />}
     </div>
   );

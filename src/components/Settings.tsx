@@ -41,14 +41,14 @@ export default function Settings() {
   };
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div data-testid="settings-view" className="h-full overflow-y-auto">
       <div className="mx-auto max-w-2xl px-6 py-6">
         <h1 className="mb-1 text-lg font-semibold">Settings</h1>
         <p className="mb-5 text-[12px] text-gray-500">{home}</p>
 
         <Section title="Secrets vault">
           <p className="mb-2 text-[12px] text-gray-500">Stored in the system keychain. Apps request them by name in <code>environment.secrets</code>.</p>
-          <div className="mb-3 divide-y divide-line rounded border border-line">
+          <div data-testid="settings-secrets" className="mb-3 divide-y divide-line rounded border border-line">
             {secrets.map((s) => (
               <div key={s} className="flex items-center px-2 py-1.5">
                 <code className="flex-1">{s}</code><span className="mr-3 text-gray-600">••••••••</span>

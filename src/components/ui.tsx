@@ -17,14 +17,14 @@ export function Badge({ children, color = "gray", title }: { children: ReactNode
   return <span title={title} className={`rounded px-1.5 py-px text-[10px] font-medium uppercase tracking-wide ${c}`}>{children}</span>;
 }
 
-export function Modal({ title, onClose, children, wide }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, wide, testid }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; testid?: string }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div data-testid={testid} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`flex max-h-[90vh] flex-col rounded-lg border border-line bg-panel shadow-2xl ${wide ? "w-[min(90vw,1100px)]" : "w-[420px]"}`}>
         <div className="flex items-center justify-between border-b border-line px-3 py-2">
           <div className="truncate font-medium">{title}</div>
@@ -55,7 +55,7 @@ export function PromptModal({ title, label, initial = "", okLabel = "Save", onOk
 }
 
 /** Click-outside dropdown menu. */
-export function Dropdown({ label, children, align = "left", disabled }: { label: ReactNode; children: (close: () => void) => ReactNode; align?: "left" | "right"; disabled?: boolean }) {
+export function Dropdown({ label, children, align = "left", disabled, testid }: { label: ReactNode; children: (close: () => void) => ReactNode; align?: "left" | "right"; disabled?: boolean; testid?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -66,7 +66,7 @@ export function Dropdown({ label, children, align = "left", disabled }: { label:
   }, [open]);
   return (
     <div ref={ref} className="relative">
-      <Btn disabled={disabled} onClick={() => setOpen(!open)}>{label} <span className="text-[9px] text-gray-500">▼</span></Btn>
+      <Btn data-testid={testid} disabled={disabled} onClick={() => setOpen(!open)}>{label} <span className="text-[9px] text-gray-500">▼</span></Btn>
       {open && (
         <div className={`absolute top-full z-40 mt-1 max-h-80 min-w-48 overflow-auto rounded border border-line bg-panel py-1 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}>
           {children(() => setOpen(false))}
@@ -76,6 +76,6 @@ export function Dropdown({ label, children, align = "left", disabled }: { label:
   );
 }
 
-export function MenuItem({ onClick, children, disabled }: { onClick: () => void; children: ReactNode; disabled?: boolean }) {
-  return <button disabled={disabled} onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-white/5 disabled:opacity-40">{children}</button>;
+export function MenuItem({ onClick, children, disabled, testid }: { onClick: () => void; children: ReactNode; disabled?: boolean; testid?: string }) {
+  return <button data-testid={testid} disabled={disabled} onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-white/5 disabled:opacity-40">{children}</button>;
 }

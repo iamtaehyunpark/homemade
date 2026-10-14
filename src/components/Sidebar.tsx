@@ -38,7 +38,7 @@ export default function Sidebar() {
     <aside ref={dropRef} className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
       <div className="flex items-center justify-between px-3 pb-2 pt-3">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Apps</span>
-        <Dropdown label="Import app…" align="right">
+        <Dropdown testid="import-app" label="Import app…" align="right">
           {(close) => (<>
             <MenuItem onClick={() => { close(); pick(true); }}>Folder…</MenuItem>
             <MenuItem onClick={() => { close(); pick(false); }}>Script file…</MenuItem>
@@ -54,7 +54,7 @@ export default function Sidebar() {
         )}
       </div>
       <div className="border-t border-line p-1.5">
-        <button onClick={() => setView(view === "settings" ? "workbench" : "settings")}
+        <button data-testid="settings" onClick={() => setView(view === "settings" ? "workbench" : "settings")}
           className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${view === "settings" ? "bg-white/5 text-accent" : "text-gray-300"}`}>
           ⚙ Settings
         </button>
@@ -82,7 +82,7 @@ function AppRow({ app }: { app: AppRecord }) {
   };
 
   return (
-    <div onClick={() => openApp(app.id)} title={app.rootDir}
+    <div data-testid={`sidebar-app-${app.id}`} onClick={() => openApp(app.id)} title={app.rootDir}
       className={`group mb-px cursor-default rounded px-2 py-1.5 ${selected ? "bg-accent/10" : "hover:bg-white/5"}`}>
       <div className="flex items-center gap-2">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? "bg-emerald-400 shadow-[0_0_6px] shadow-emerald-400" : "bg-gray-600"}`} />
@@ -91,7 +91,7 @@ function AppRow({ app }: { app: AppRecord }) {
       </div>
       {app.unmanagedVenvBytes > 0 && (
         <div className="ml-3.5 mt-1">
-          <Btn className="!px-1.5 !py-0 !text-[10px] text-amber-400" disabled={migrating} onClick={dedupe} title="Move this app's venv into the shared store">
+          <Btn data-testid="venv-dedupe" className="!px-1.5 !py-0 !text-[10px] text-amber-400" disabled={migrating} onClick={dedupe} title="Move this app's venv into the shared store">
             {fmtBytes(app.unmanagedVenvBytes)} · {migrating ? "Deduplicating…" : "Deduplicate"}
           </Btn>
         </div>

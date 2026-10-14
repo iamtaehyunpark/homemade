@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview";
 import { useStore } from "../state/store";
+import { openAppWindow } from "../lib/appWindow";
 import AppPanel from "./AppPanel";
 import AgentTerminal from "./AgentTerminal";
 
@@ -55,16 +56,25 @@ export default function Workbench() {
   useEffect(() => {
     if (!api) return;
     syncing.current = true;
+    const toWindow: string[] = [];
     for (const id of openApps) {
       if (api.getPanel(appPanelId(id))) continue;
       const app = apps.find((a) => a.id === id);
-      api.addPanel({ id: appPanelId(id), component: "app", title: app?.name ?? id, params: { appId: id } });
+      const layout = app?.manifest.ui.default_layout ?? "tab";
+      if (layout === "window" && app) { toWindow.push(id); openAppWindow(app); continue; }
+      const ref = api.activePanel;
+      api.addPanel({
+        id: appPanelId(id), component: "app", title: app?.name ?? id, params: { appId: id },
+        ...(layout === "split_right" && ref ? { position: { direction: "right" as const, referencePanel: ref.id } } : {}),
+      });
     }
     for (const p of [...api.panels]) {
       const appId = p.id.replace(/^(app|agent):/, "");
       if (!openApps.includes(appId)) p.api.close();
     }
     syncing.current = false;
+    // Window-layout apps live in their own webview window; keep them out of the dock's open list.
+    if (toWindow.length) for (const id of toWindow) useStore.getState().closeApp(id);
   }, [api, openApps, apps]);
 
   useEffect(() => {

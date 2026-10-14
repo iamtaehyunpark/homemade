@@ -20,15 +20,17 @@ pub const RING_CAPACITY: usize = 5000;
 /// Unknown directives are logged as stdout.
 pub fn handle_line(state: &Arc<AppState>, run: &Arc<ActiveRun>, line: &str, is_stderr: bool) {
     let line = line.trim_end_matches(['\r', '\n']);
-    {
-        let mut log = run.log.lock().unwrap();
-        log.push_back(line.to_string());
-        while log.len() > RING_CAPACITY { log.pop_front(); }
-    }
     if !is_stderr {
         if let Some(rest) = line.trim_start().strip_prefix("@homemade:") {
-            if handle_directive(state, run, rest) { return; }
+            // Directive lines are never stored in the ring nor emitted as stdout.
+            handle_directive(state, run, rest);
+            return;
         }
+    }
+    {
+        let mut log = run.log.lock().unwrap();
+        log.push_back(if is_stderr { format!("[stderr] {line}") } else { line.to_string() });
+        while log.len() > RING_CAPACITY { log.pop_front(); }
     }
     let ev = if is_stderr { "run://stderr" } else { "run://stdout" };
     state.emit(ev, json!({ "runId": run.run_id, "line": line }));

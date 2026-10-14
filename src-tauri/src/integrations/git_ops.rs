@@ -37,7 +37,7 @@ pub fn head_sha(root: &Path) -> Option<String> {
     git(root, &["rev-parse", "HEAD"]).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-fn is_dirty(root: &Path) -> bool {
+pub fn is_dirty(root: &Path) -> bool {
     git(root, &["status", "--porcelain"]).map(|s| !s.trim().is_empty()).unwrap_or(false)
 }
 

@@ -82,8 +82,22 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
         other => return err(format!("unknown agent type: {other}")),
     };
 
-    // --- Record session provenance before spawn ---
-    let head_before = git_ops::head_sha(&root);
+    // --- Auto-checkpoint (spec §10E) + provenance before spawn ---
+    let is_agent = agent_type != "custom_shell";
+    let is_git = root.join(".git").exists();
+    let auto_ckpt = is_agent && is_git && {
+        let cfg = crate::storage::config::load(&state.home);
+        crate::storage::config::get_bool(&cfg, "git", "auto_checkpoint", true)
+    };
+    let started_at = now_ms();
+    let head_before = if auto_ckpt && git_ops::is_dirty(&root) {
+        let r = root.clone();
+        let msg = format!("homemade: before {} session", agent_label(agent_type));
+        tokio::task::spawn_blocking(move || git_ops::checkpoint(&r, &msg)).await.ok().and_then(|r| r.ok())
+            .or_else(|| git_ops::head_sha(&root))
+    } else {
+        git_ops::head_sha(&root)
+    };
     if let Some(id) = &session_id {
         let rec = AgentSessionRecord {
             session_id: id.clone(), app_id: app_id.into(), agent_type: agent_type.into(),
@@ -145,17 +159,49 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
         std::thread::spawn(move || {
             let code = child.wait().map(|s| s.exit_code() as i64).unwrap_or(-1);
             state.active_ptys.remove(&pty_id);
-            if let Some(id) = session_id {
-                let rec = AgentSessionRecord {
-                    session_id: id, app_id, agent_type, title: None, git_commit_before: None,
-                    git_commit_after: git_ops::head_sha(&root), updated_at: now_ms(),
+            if is_agent {
+                let mut title = None;
+                // Find the session a new codex/antigravity PTY created (they don't take a pre-chosen id).
+                let mut sid = session_id.clone();
+                if sid.is_none() && (agent_type == "codex" || agent_type == "antigravity") {
+                    if let Ok(found) = agents::discover(&root, &app_id) {
+                        if let Some(s) = found.into_iter()
+                            .filter(|s| s.agent_type == agent_type && s.updated_at >= started_at - 2000)
+                            .max_by_key(|s| s.updated_at)
+                        {
+                            title = s.title.clone();
+                            sid = Some(s.session_id);
+                        }
+                    }
+                }
+                let head_after = if auto_ckpt && git_ops::is_dirty(&root) {
+                    let mut msg = format!("homemade: after {} session", agent_label(&agent_type));
+                    if let Some(t) = title.as_deref().filter(|t| *t != "New session") {
+                        msg.push(' ');
+                        msg.push_str(&t.chars().take(60).collect::<String>());
+                    }
+                    git_ops::checkpoint(&root, &msg).ok().or_else(|| git_ops::head_sha(&root))
+                } else {
+                    git_ops::head_sha(&root)
                 };
-                if let Ok(c) = state.db.lock() { let _ = crate::db::queries::upsert_agent_session(&c, &rec); }
+                if let Some(id) = sid {
+                    let rec = AgentSessionRecord {
+                        session_id: id, app_id, agent_type,
+                        title,
+                        git_commit_before: if resuming { None } else { head_before },
+                        git_commit_after: head_after, updated_at: now_ms(),
+                    };
+                    if let Ok(c) = state.db.lock() { let _ = crate::db::queries::upsert_agent_session(&c, &rec); }
+                }
             }
             state.emit("pty://exit", serde_json::json!({ "ptyId": pty_id, "exitCode": code }));
         });
     }
     Ok(info)
+}
+
+fn agent_label(agent_type: &str) -> &str {
+    match agent_type { "claude_code" => "claude", "antigravity" => "agy", other => other }
 }
 
 fn read_loop(state: Arc<AppState>, pty_id: String, mut reader: Box<dyn Read + Send>, log_path: PathBuf) {

@@ -14,6 +14,7 @@ pub fn build_argv(manifest: &HomemadeManifest, inputs: &Value) -> Result<Vec<Str
     if argv.is_empty() { return err("Manifest exec is empty"); }
     let mut positionals: Vec<(usize, Vec<String>)> = vec![];
     let mut flags: Vec<String> = vec![];
+    let mut extra: Vec<String> = vec![];
     for (key, spec) in &manifest.inputs {
         let label = spec.label.clone().unwrap_or_else(|| key.clone());
         let raw = inputs.get(key).filter(|v| !v.is_null()).or(spec.default.as_ref()).cloned().unwrap_or(Value::Null);
@@ -29,6 +30,13 @@ pub fn build_argv(manifest: &HomemadeManifest, inputs: &Value) -> Result<Vec<Str
             continue;
         }
         let ft = spec.field_type.as_str();
+        if ft == "args" {
+            let s = scalar(&raw);
+            let parts = shell_words::split(&s)
+                .map_err(|e| crate::error::Error::Msg(format!("Invalid value for {label}: {e}")))?;
+            extra.extend(parts);
+            continue;
+        }
         if ft == "bool" {
             let b = match &raw { Value::Bool(b) => *b, Value::String(s) => s == "true", Value::Number(n) => n.as_f64() != Some(0.0), _ => false };
             let Some(flag) = &spec.cli_flag else {
@@ -64,6 +72,7 @@ pub fn build_argv(manifest: &HomemadeManifest, inputs: &Value) -> Result<Vec<Str
     positionals.sort_by_key(|(i, _)| *i);
     for (_, vs) in positionals { argv.extend(vs); }
     argv.extend(flags);
+    argv.extend(extra);
     Ok(argv)
 }
 

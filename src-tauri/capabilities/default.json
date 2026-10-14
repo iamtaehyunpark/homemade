@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-close", "core:window:allow-destroy", "core:event:default", "opener:default", "dialog:default"]
+  "description": "Capability for the main window and standalone app windows",
+  "windows": ["main", "app-*"],
+  "permissions": ["core:default", "core:window:allow-close", "core:window:allow-destroy", "core:event:default", "core:webview:allow-create-webview-window", "opener:default", "dialog:default", "drag:default"]
 }

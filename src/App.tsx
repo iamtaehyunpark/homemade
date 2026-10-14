@@ -9,8 +9,35 @@ import { useTauriEvents } from "./lib/useTauriEvents";
 import { startDropRouter } from "./lib/dropRouter";
 import { ipc } from "./lib/ipc";
 import { useStore } from "./state/store";
+import AppPanel from "./components/AppPanel";
+
+const params = new URLSearchParams(window.location.search);
+const standaloneAppId = params.get("app");
+
+/** default_layout = "window": a single AppPanel in its own webview window, no sidebar/dock. */
+function StandaloneApp({ appId }: { appId: string }) {
+  useTauriEvents();
+  useEffect(() => startDropRouter(), []);
+  const toast = useStore((s) => s.toast);
+  const notify = useStore((s) => s.notify);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => notify(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast, notify]);
+  return (
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1"><AppPanel appId={appId} /></div>
+      {toast && <div className="fixed bottom-3 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>}
+    </div>
+  );
+}
 
 export default function App() {
+  return standaloneAppId ? <StandaloneApp appId={standaloneAppId} /> : <MainApp />;
+}
+
+function MainApp() {
   useTauriEvents();
   useEffect(() => startDropRouter(), []);
   const view = useStore((s) => s.view);
@@ -39,7 +66,7 @@ export default function App() {
         <div className="fixed bottom-9 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>
       )}
       {confirmExit != null && (
-        <Modal title="Quit Homemade?" onClose={() => setConfirmExit(null)}>
+        <Modal testid="confirm-exit-modal" title="Quit Homemade?" onClose={() => setConfirmExit(null)}>
           <p className="text-gray-300">{confirmExit} program{confirmExit === 1 ? " is" : "s are"} running. Stop all and quit?</p>
           <div className="mt-4 flex justify-end gap-2">
             <Btn onClick={() => setConfirmExit(null)}>Cancel</Btn>

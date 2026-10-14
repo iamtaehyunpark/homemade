@@ -60,6 +60,9 @@ export const ipc = {
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
   homemadeHome: () => invoke<string>("homemade_home"),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
+  // e2e harness
+  e2eReport: (msg: string) => invoke<void>("e2e_report", { msg }),
+  e2eDone: (code: number) => invoke<void>("e2e_done", { code }),
 };
 
 export const events = {

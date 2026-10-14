@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { ipc, on, events } from "./ipc";
-import type { ArtifactRecord, ResourceSnapshot, RunLineEvent, RunMetricEvent, RunProgressEvent, RunRecord } from "./types";
+import type { QueuedJobInfo, ArtifactRecord, ResourceSnapshot, RunLineEvent, RunMetricEvent, RunProgressEvent, RunRecord } from "./types";
 import { useStore } from "../state/store";
 import { useLive, type LogLine } from "../state/live";
 import { isTerminal } from "./format";
@@ -29,6 +29,7 @@ export function useTauriEvents() {
           ipc.getApp(r.appId).then(st().upsertApp).catch(() => {});
         }
       }),
+      on<QueuedJobInfo>(events.runQueued, (q) => st().setQueued(q)),
       on<RunLineEvent>(events.runStdout, (p) => pushLine(p.runId, { err: false, text: p.line })),
       on<RunLineEvent>(events.runStderr, (p) => pushLine(p.runId, { err: true, text: p.line })),
       on<RunProgressEvent>(events.runProgress, (p) => useLive.getState().setProgress(p.runId, p.percent, p.message)),

@@ -91,8 +91,12 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     let m = &job.manifest;
     let root = job.root_dir.clone();
     let cwd = root.join(&m.app.cwd);
+    let cfg_table = crate::storage::config::load(&state.home);
+    let aliases = crate::storage::config::get_table(&cfg_table, "aliases");
+    let mut artifacts_cfg = m.artifacts.clone();
+    artifacts_cfg.output_dir = env_router::expand_vars(&artifacts_cfg.output_dir, &aliases, &state.login_env);
     let out_dir = {
-        let p = PathBuf::from(&m.artifacts.output_dir);
+        let p = PathBuf::from(&artifacts_cfg.output_dir);
         if p.is_absolute() { p } else { root.join(p) }
     };
     let _ = std::fs::create_dir_all(&out_dir);
@@ -101,7 +105,7 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     // ---- environment ----
     let mut env = state.login_env.clone();
     env_router::inject_shared_storage_env(&mut env, &state.home, m.resources.isolated_cache);
-    for (k, v) in &m.environment.vars { env.insert(k.clone(), v.clone()); }
+    for (k, v) in &m.environment.vars { env.insert(k.clone(), env_router::expand_vars(v, &aliases, &state.login_env)); }
     let secret_vals = secrets::resolve(&m.environment.secrets)?;
     for (k, v) in &secret_vals { env.insert(k.clone(), v.clone()); }
     let res_dir = crate::commands::resources_dir(&state.app_handle);
@@ -188,14 +192,14 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     let t_out = stdout.map(|s| tauri::async_runtime::spawn(pump(state.clone(), run.clone(), s, false)));
     let t_err = stderr.map(|s| tauri::async_runtime::spawn(pump(state.clone(), run.clone(), s, true)));
 
-    let artifacts_cfg = m.artifacts.clone();
+    let isolated = m.resources.isolated_cache;
     tauri::async_runtime::spawn(async move {
         let status = child.wait().await;
         // Drain remaining output (bounded: grandchildren may keep pipes open).
         for t in [t_out, t_err].into_iter().flatten() {
             let _ = tokio::time::timeout(Duration::from_secs(3), t).await;
         }
-        finalize(state, run, status.ok(), snapshot, artifacts_cfg).await;
+        finalize(state, run, status.ok(), snapshot, artifacts_cfg, isolated).await;
     });
     Ok(())
 }
@@ -221,6 +225,7 @@ async fn finalize(
     status: Option<std::process::ExitStatus>,
     snapshot: artifact_differ::Snapshot,
     cfg: crate::manifest::schema::ArtifactConfig,
+    isolated_cache: bool,
 ) {
     let code = status.and_then(|s| s.code()).map(|c| c as i64);
     let final_status = if run.stop_requested.load(Ordering::SeqCst) {
@@ -244,6 +249,22 @@ async fn finalize(
         for a in &found { let _ = queries::insert_artifact(&c, a); }
     }
     for a in found { state.emit("run://artifact", a); }
+
+    // storage_refs: shared_cache entries touched during this run.
+    if !isolated_cache {
+        let (home, since) = (state.home.clone(), run.started_at);
+        let refs = tokio::task::spawn_blocking(move || env_router::scan_shared_cache_changes(&home, since))
+            .await
+            .unwrap_or_default();
+        if !refs.is_empty() {
+            let c = state.db.lock().unwrap();
+            for (hash, path, size) in refs {
+                let _ = queries::upsert_storage_ref(&c, &crate::types::StorageRef {
+                    asset_hash: hash, asset_path: path, app_id: run.app_id.clone(), size_bytes: size,
+                });
+            }
+        }
+    }
 
     // Fail any pending RPC waiters.
     let keys: Vec<String> = run.rpc_pending.iter().map(|e| e.key().clone()).collect();

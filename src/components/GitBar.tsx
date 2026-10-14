@@ -28,7 +28,7 @@ export default function GitBar({ appId, refreshKey }: { appId: string; refreshKe
     return (
       <div className="flex items-center gap-2 text-[12px] text-gray-500">
         <span>Not versioned</span>
-        <Btn disabled={busy} onClick={() => act(() => ipc.gitInit(appId))}>Track with Git</Btn>
+        <Btn data-testid="git-init" disabled={busy} onClick={() => act(() => ipc.gitInit(appId))}>Track with Git</Btn>
       </div>
     );
   }
@@ -36,14 +36,14 @@ export default function GitBar({ appId, refreshKey }: { appId: string; refreshKe
     <div className="flex items-center gap-2 text-[12px]">
       <span className="font-mono text-gray-400" title={st.head ?? ""}>⎇ {st.head?.slice(0, 7) ?? "no commits"}</span>
       {st.dirty && <span className="text-amber-400" title="Uncommitted changes">● modified</span>}
-      <Btn disabled={busy || !st.dirty} onClick={() => setAsking(true)}>Checkpoint</Btn>
-      <Dropdown label="History" align="right" disabled={!st.log.length}>
+      <Btn data-testid="git-checkpoint" disabled={busy || !st.dirty} onClick={() => setAsking(true)}>Checkpoint</Btn>
+      <Dropdown testid="git-log" label="History" align="right" disabled={!st.log.length}>
         {(close) => st.log.map((l) => (
           <div key={l.sha} className="flex items-center gap-2 px-3 py-1 hover:bg-white/5">
             <code className="text-gray-500">{l.sha.slice(0, 7)}</code>
             <span className="min-w-0 flex-1 truncate" title={l.message}>{l.message}</span>
             <span className="text-gray-600">{relTime(l.timestamp)}</span>
-            {l.sha !== st.head && <Btn className="!py-0" onClick={() => { close(); setRevert(l); }}>Revert to</Btn>}
+            {l.sha !== st.head && <Btn data-testid={`git-revert-${l.sha}`} className="!py-0" onClick={() => { close(); setRevert(l); }}>Revert to</Btn>}
           </div>
         ))}
       </Dropdown>

@@ -56,6 +56,14 @@ pub fn load_or_infer(root: &Path, resources_dir: &Path) -> Result<(HomemadeManif
         return err("No runnable entry found");
     }
 
+    if inputs.is_empty() {
+        inputs.insert("extra".into(), InputFieldSpec {
+            field_type: "args".into(), cli_flag: None, positional_index: None,
+            label: Some("Extra arguments".into()), description: None, required: Some(false),
+            default: None, options: None, extensions: None, min: None, max: None, step: None, bool_style: None,
+        });
+    }
+
     let m = HomemadeManifest {
         app: AppConfig {
             id, name, version: "0.1.0".into(), description: None, mode: ExecutionMode::Cli, exec,

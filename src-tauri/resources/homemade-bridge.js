@@ -12,6 +12,7 @@
   var finishedRuns = new Map();     // runId -> final status payload (status arriving before rpc_result)
   var listeners = new Map();        // event name -> Set<cb>
   var info = { appId: null, schema: null, platform: null };
+  var e2eEnabled = false;
   var resolveReady;
   var ready = new Promise(function (r) { resolveReady = r; });
 
@@ -65,8 +66,24 @@
     switch (m.type) {
       case "init":
         info.appId = m.appId; info.schema = m.schema; info.platform = m.platform;
+        e2eEnabled = m.e2e === true;
         resolveReady(api);
         break;
+      case "e2e_eval": {
+        if (!e2eEnabled) return;
+        var eid = m.id;
+        var reply = function (ok, val) {
+          var msg = { type: "e2e_result", id: eid, ok: ok };
+          if (ok) {
+            try { msg.result = val === undefined ? null : JSON.parse(JSON.stringify(val)); } catch (_) { msg.result = String(val); }
+          } else msg.error = val && val.message ? String(val.message) : String(val);
+          post(msg);
+        };
+        try {
+          Promise.resolve((0, eval)(String(m.code))).then(function (v) { reply(true, v); }, function (e) { reply(false, e); });
+        } catch (e) { reply(false, e); }
+        break;
+      }
       case "rpc_result": {
         var p = pending.get(m.id);
         if (!p) return;
