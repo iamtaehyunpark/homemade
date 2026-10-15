@@ -8,6 +8,7 @@ import { useLive, type LogLine } from "../state/live";
 import { isTerminal } from "./format";
 import { DOCK_EVENT, forceTab, inWindow, openAppWindow, appWindowLabel } from "./appWindow";
 import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { workspaces } from "./registry";
 const isMainWindow = () => getCurrentWebviewWindow().label === "main";
 
 export function useTauriEvents() {
@@ -51,6 +52,12 @@ export function useTauriEvents() {
         if (!isMainWindow()) return;
         const app = st().apps.find((a) => a.id === appId);
         if (w && app) { openAppWindow(app); st().closeApp(appId); } else { inWindow.delete(appId); forceTab.add(appId); st().openApp(appId); }
+      }),
+      // ⌘W (see windows.rs): close the focused tab of the current workspace; the window only when there is none.
+      on<void>("menu://close", () => {
+        const s = st();
+        if (isMainWindow() && s.view === "workbench" && s.selectedAppId && workspaces.has(s.selectedAppId)) { workspaces.get(s.selectedAppId)!.closeActive(); return; }
+        getCurrentWebviewWindow().close().catch(() => {});
       }),
       on<{ appId: string }>("control://close-window", ({ appId }) => { if (isMainWindow()) WebviewWindow.getByLabel(appWindowLabel(appId)).then((w) => w?.close()).catch(() => {}); }),
       on<{ view: "workbench" | "launch" | "monitor" | "settings" }>("control://view", ({ view }) => { if (isMainWindow()) st().setView(view); }),

@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         .setup(|app| {
             windows::main_window(app.handle())?;
+            windows::install_menu(app.handle())?;
             let home = storage::config::homemade_home();
             storage::env_router::ensure_layout(&home)?;
             let conn = db::open(&home.join("state.db"))?;

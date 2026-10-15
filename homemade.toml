@@ -1,0 +1,40 @@
+[app]
+id = "homemade"
+name = "homemade"
+version = "0.1.0"
+description = "Lightweight launcher & runtime workspace"
+mode = "cli"
+exec = "pnpm tauri dev"
+cwd = "."
+env_manager = "pnpm"
+
+[ui]
+default_layout = "tab"
+
+[resources]
+requires_gpu = false
+isolated_cache = false
+graceful_timeout_ms = 3000
+kill_timeout_ms = 2000
+
+[environment]
+secrets = []
+
+[environment.vars]
+HOME = "~/homemade"
+TMPDIR = "/tmp"
+
+[artifacts]
+output_dir = "./outputs"
+scratch_globs = []
+
+[inputs.input]
+type = "file"
+cli_flag = "--input"
+label = "Input file"
+description = "Path to input data"
+required = false
+extensions = [
+    ".py",
+    ".json",
+]

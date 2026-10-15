@@ -96,7 +96,9 @@ function AppWorkspace({ appId, visible }: { appId: string; visible: boolean }) {
         position: last ? { direction: "within", referencePanel: last.id } : { direction: "right", referencePanel: appPanelId(appId) },
       });
     };
-    workspaces.set(appId, { addShell });
+    // ⌘W: the focused tab (a shell, or the program panel = the whole workspace).
+    const closeActive = () => (e.api.activePanel ?? e.api.getPanel(appPanelId(appId)))?.api.close();
+    workspaces.set(appId, { addShell, closeActive });
     // Drag the program tab out of the dock ("to nowhere") → it opens in its own window.
     let dragging = false;
     e.api.onWillDragPanel((ev) => { dragging = ev.panel.id === appPanelId(appId); });
