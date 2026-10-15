@@ -86,6 +86,9 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
     // ⌘-combos belong to the launcher (⌘1…6 tabs, ⌘⇧C select, ⌘⇧D dock, ⌘C/⌘V native copy/paste); everything else —
     // Esc, Option/Meta, Ctrl — is the program's and must reach the PTY untouched.
     t.attachCustomKeyEventHandler((e) => !e.metaKey);
+    const f = new FitAddon();
+    t.loadAddon(f);
+    t.open(host.current!);
     // WebKit on macOS drives the Korean (and other) IMEs without composition events: a syllable arrives as `insertText`
     // "ㅎ" followed by `insertReplacementText` "하", "한" as it is built. xterm forwards only the first jamo and ignores
     // the replacements, so Korean came out as bare consonants. Mirror those edits instead: delete what the IME replaced,
@@ -104,9 +107,6 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
       if (out) t.input(out, true);
     }, true);
     taHost.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).keyCode === 229) e.stopPropagation(); }, true); // IME placeholder key: nothing for xterm to do
-    const f = new FitAddon();
-    t.loadAddon(f);
-    t.open(host.current!);
     term.current = t; fit.current = f;
     try { f.fit(); } catch { /* not laid out yet */ }
     const sub = t.onData((d) => ptyId.current && ipc.ptyWrite(ptyId.current, d).catch(() => {}));
