@@ -65,7 +65,7 @@
       <h1>GUI everything for your self-made software.</h1>
       <p>Coding agents make it five minutes to build a script. Six months later it is a forgotten folder with flags you no longer remember. Homemade is the launcher and runtime workspace where those programs live: an interface, a lifecycle, a window, and an agent that can run them for you.</p>
       <div class="cta">
-        <a class="btn primary" href="#install">Get Homemade</a>
+        <a class="btn primary" href="https://github.com/iamtaehyunpark/homemade/releases/download/v0.1.0/Homemade-0.1.0-macos-arm64.dmg">Download for macOS</a>
         <a class="btn" href="https://github.com/iamtaehyunpark/homemade">View source</a>
       </div>
     </div>
@@ -134,10 +134,17 @@ claude mcp add homemade -- \
 
   <section id="install">
     <h2>Install</h2>
-    <p class="lead">macOS on Apple Silicon today. Linux builds are untested. Homemade is a Tauri app: a Rust core with a React workbench.</p>
+    <p class="lead">macOS on Apple Silicon today. One download, nothing else to install: the app bundles everything it needs. Linux builds are untested.</p>
+    <div class="cta" style="margin-bottom:22px">
+      <a class="btn primary" href="https://github.com/iamtaehyunpark/homemade/releases/download/v0.1.0/Homemade-0.1.0-macos-arm64.dmg">Download Homemade 0.1.0 (.dmg, 6 MB)</a>
+      <a class="btn" href="https://github.com/iamtaehyunpark/homemade/releases/download/v0.1.0/Homemade-0.1.0-macos-arm64.app.zip">.app as zip</a>
+      <a class="btn" href="https://github.com/iamtaehyunpark/homemade/releases">All releases</a>
+    </div>
+    <p class="lead" style="font-size:13.5px">The build is not notarized yet, so macOS will block the first launch. Right-click Homemade.app and choose Open, or run <code>xattr -dr com.apple.quarantine /Applications/Homemade.app</code> once.</p>
     <div class="two">
       <div>
-        <pre><code>git clone https://github.com/iamtaehyunpark/homemade
+        <pre><code># or build from source
+git clone https://github.com/iamtaehyunpark/homemade
 cd homemade
 pnpm install
 pnpm tauri build
