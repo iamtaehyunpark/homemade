@@ -1,10 +1,15 @@
 // OWNER: agent F. Dockview workbench: one panel per opened app, plus agent terminal panels.
 import { useEffect, useRef, useState } from "react";
 import { DockviewReact, themeDark, themeLight, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview";
-import { useStore } from "../state/store";
+import { useStore, latestRun } from "../state/store";
 import { openAppWindow, forceTab, inWindow } from "../lib/appWindow";
 import AppPanel from "./AppPanel";
+import Icon from "./Icon";
+import { Btn } from "./ui";
+import { pickApp } from "../lib/importApp";
+import { isActive, relTime } from "../lib/format";
 import AgentTerminal from "./AgentTerminal";
+import type { AgentType } from "../lib/types";
 import { useTheme } from "../lib/theme";
 
 export const appPanelId = (appId: string) => `app:${appId}`;
@@ -13,18 +18,50 @@ export const agentPanelId = (appId: string) => `agent:${appId}`;
 function AppPanelHost(props: IDockviewPanelProps<{ appId: string }>) {
   return <AppPanel appId={props.params.appId} api={props.api} containerApi={props.containerApi} />;
 }
-function AgentPanelHost(props: IDockviewPanelProps<{ appId: string }>) {
-  return <AgentTerminal appId={props.params.appId} />;
+function AgentPanelHost(props: IDockviewPanelProps<{ appId: string; initialAgentType?: AgentType }>) {
+  return <AgentTerminal appId={props.params.appId} initialAgentType={props.params.initialAgentType} />;
 }
 const components = { app: AppPanelHost, agent: AgentPanelHost };
 
 function Watermark() {
+  const apps = useStore((s) => s.apps);
+  const runs = useStore((s) => s.runs);
+  const openApp = useStore((s) => s.openApp);
+  const sorted = [...apps].sort((a, b) => (b.lastRunAt ?? b.createdAt) - (a.lastRunAt ?? a.createdAt));
+  const runningCount = apps.filter((app) => isActive(latestRun(runs, app.id)?.status)).length;
   return (
-    <div className="flex h-full items-center justify-center text-muted">
-      <div className="text-center">
-        <div className="mb-1 text-[15px] text-fg">No app open</div>
-        <div className="text-[12px]">Pick an app in the sidebar, or drop a folder anywhere to import it.</div>
+    <div className="h-full overflow-y-auto bg-panel">
+      <div className="workspace-heading">
+        <div className="flex items-center gap-3"><span className="font-semibold text-fg">Apps</span><span>{apps.length} apps{runningCount > 0 ? ` · ${runningCount} running` : ""}</span></div>
+        <Btn onClick={() => void pickApp()}><Icon name="plus" size={14} /> Add app</Btn>
       </div>
+      {apps.length === 0 ? (
+        <div className="workspace-empty">
+          <Icon name="folder" size={28} className="mb-4 text-faint" />
+          <h1 className="mb-2 text-[17px] font-semibold">No apps yet</h1>
+          <p className="mb-5 max-w-sm text-[12px] leading-6 text-muted">Import a project folder or script. Homemade will add its inputs, run controls, logs, and outputs.</p>
+          <div className="flex gap-2"><Btn variant="primary" onClick={() => void pickApp()}>Import folder…</Btn><Btn onClick={() => void pickApp(false)}>Import script…</Btn></div>
+          <p className="mt-5 text-[11px] text-faint">Or drag a folder into this window.</p>
+        </div>
+      ) : (
+        <div className="px-6 py-5">
+          <h1 className="mb-4 text-[12px] font-medium text-muted">Apps · recently used first</h1>
+          <div className="overflow-x-auto">
+            <table className="workspace-table w-full text-left text-[12px]">
+              <thead><tr><th>App</th><th>Type</th><th>Status</th><th className="whitespace-nowrap">Last run</th></tr></thead>
+              <tbody>{sorted.map((app) => {
+                const run = latestRun(runs, app.id);
+                return <tr key={app.id}>
+                  <td><button onClick={() => openApp(app.id)} className="group flex w-full items-center gap-3 text-left"><Icon name={app.executionMode === "webapp" ? "window" : "code"} size={17} className="text-muted" /><span className="min-w-0"><span className="block font-medium group-hover:text-accent">{app.name}</span><span className="mt-1 block max-w-[420px] truncate font-mono text-[10px] text-faint" title={app.rootDir}>{app.rootDir}</span></span></button></td>
+                  <td className="whitespace-nowrap text-muted">{app.executionMode === "webapp" ? "Web app" : app.executionMode === "rpc_worker" ? "Worker" : "CLI"}</td>
+                  <td><span className={`inline-flex items-center gap-1.5 ${isActive(run?.status) ? "text-ok" : run?.status === "failed" ? "text-danger" : "text-muted"}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{run?.status.replaceAll("_", " ") ?? "Idle"}</span></td>
+                  <td className="whitespace-nowrap text-muted">{relTime(app.lastRunAt) || "Never"}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -34,6 +71,7 @@ export default function Workbench() {
   const openApps = useStore((s) => s.openApps);
   const selected = useStore((s) => s.selectedAppId);
   const apps = useStore((s) => s.apps);
+  const pendingShellAppId = useStore((s) => s.pendingShellAppId);
   const syncing = useRef(false);
   const theme = useTheme();
 
@@ -100,6 +138,17 @@ export default function Workbench() {
     const p = api.getPanel(appPanelId(selected));
     if (p && !p.api.isActive) p.api.setActive();
   }, [api, selected]);
+
+  useEffect(() => {
+    if (!api || !pendingShellAppId) return;
+    const appPanel = api.getPanel(appPanelId(pendingShellAppId));
+    if (!appPanel) return;
+    const id = agentPanelId(pendingShellAppId);
+    if (!api.getPanel(id)) {
+      api.addPanel({ id, component: "agent", title: "Shell", params: { appId: pendingShellAppId, initialAgentType: "custom_shell" }, position: { direction: "right", referencePanel: appPanel.id } });
+    }
+    useStore.getState().setPendingShellAppId(null);
+  }, [api, pendingShellAppId, openApps]);
 
   return (
     <div ref={rootRef} data-testid="dock-root" className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}>

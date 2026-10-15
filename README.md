@@ -10,7 +10,11 @@ pnpm install
 pnpm tauri dev
 ```
 
-Then drop a folder (or a `.py` file) onto the sidebar, or use **Import app…**. Try `examples/hello-cli`, `examples/hello-ui`, `examples/hello-worker`, `examples/no-manifest`, `examples/webapp-app`.
+Then drop a folder (or a `.py` file) onto the sidebar, or use **Add → Add folder…**. Try `examples/hello-cli`, `examples/hello-ui`, `examples/hello-worker`, `examples/no-manifest`, `examples/webapp-app`.
+
+Use **Add → Create project…** to start a new project. It lands in `~/homemade/<name>` by default (change the location in the dialog, or set `dir` under `[projects]` in `~/.homemade/config.toml`); Homemade creates the folder and opens a shell inside it. Set `app.exec` in the Manifest tab when the project is ready to run. Blank projects stay out of Launch until a run command is configured.
+
+The sidebar can collapse to an icon rail using its top-right button. **Select element** lives in the workspace toolbar (⌘⇧C).
 
 ## Headless smoke test
 
@@ -35,7 +39,7 @@ Any app can run as if it were a program of its own: open it and press the **⧉ 
 
 ## Select mode: point at anything, tell the agent
 
-Press the ⌖ Select button (sidebar footer or the agent terminal toolbar, or ⌘⇧C), then click any element in the launcher: a run row, a log line, an output card, a form field, a tile, or a spot inside a program's web UI. Homemade types a reference like `[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback …" (app kogrammar)]` into the app's open agent session, without pressing Enter, so you can continue with what you want done about it. With no agent session open, the reference goes to the clipboard. Esc leaves select mode.
+Press **Select element** (workspace toolbar, or ⌘⇧C), then click any element in the launcher: a run row, a log line, an output card, a form field, a tile, or a spot inside a program's web UI. Homemade types a reference like `[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback …" (app kogrammar)]` into the app's open agent session, without pressing Enter, so you can continue with what you want done about it. With no agent session open, the reference goes to the clipboard. Esc leaves select mode.
 
 ## CLI and MCP: driving Homemade from a shell or an agent
 
@@ -44,6 +48,7 @@ The same binary is a CLI and an MCP server, and both control the running app thr
 ```sh
 homemade status                         # is the GUI up, what is running
 homemade import ~/code/thing            # register a folder
+homemade new thing                      # create ~/homemade/thing with a blank manifest and register it (--in DIR elsewhere)
 homemade run thing input=a.mp4 --wait   # run and block; exit 0 on success
 homemade log <run-id> --follow
 homemade open thing --window            # open as a standalone program window

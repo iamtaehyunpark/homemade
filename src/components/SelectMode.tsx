@@ -2,6 +2,7 @@
 // button leaves the mode. Mounted once in App; toggled through the store (`selectMode`) or ⌘⇧C.
 import { useEffect, useState } from "react";
 import { useStore } from "../state/store";
+import Icon from "./Icon";
 import { describe, mention } from "../lib/selectMode";
 
 export default function SelectMode() {
@@ -70,15 +71,16 @@ export default function SelectMode() {
   );
 }
 
-/** The toggle. Lives in the agent terminal toolbar and in the sidebar footer. */
+/** Element picker in the development toolbar. */
 export function SelectButton({ compact }: { compact?: boolean }) {
   const on = useStore((s) => s.selectMode);
   const setOn = useStore((s) => s.setSelectMode);
   return (
-    <button data-testid="select-mode" aria-pressed={on} onClick={() => setOn(!on)}
-      title="Select mode (⌘⇧C): click any element in the launcher to mention it in the agent session"
-      className={`rounded border px-2 py-0.5 text-[12px] ${on ? "border-accent bg-accent text-white" : "border-line bg-panel hover:bg-panel-2"}`}>
-      ⌖{compact ? "" : " Select"}
+    <button data-testid="select-mode" aria-label="Select element for agent" aria-pressed={on} onClick={() => setOn(!on)}
+      title="Select an element to reference in your agent session (⌘⇧C). Press Esc to cancel."
+      className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-[11px] ${on ? "border-accent bg-accent-soft text-accent" : "border-transparent text-muted hover:border-line hover:bg-panel-2 hover:text-fg"}`}>
+      <Icon name="cursor" size={15} />{!compact && <span>{on ? "Selecting…" : "Select element"}</span>}
+      {on && <kbd className="rounded border border-accent/30 px-1 text-[9px]">Esc</kbd>}
     </button>
   );
 }

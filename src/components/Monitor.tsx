@@ -20,7 +20,7 @@ function Graph({ label, series, max, unit, color, current, testid }: { label: st
   }, [series, max]);
   const area = path ? `${path.split(" ")[0].split(",")[0]},${H} ${path} ${W},${H}` : "";
   return (
-    <div data-testid={testid} className="rounded border border-line bg-panel p-3">
+    <div data-testid={testid} className="rounded-md border border-line bg-panel p-4">
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-[12px] font-semibold uppercase tracking-wider text-muted">{label}</span>
         <span className="font-mono text-[13px]" style={{ color }}>{current}</span>
@@ -81,9 +81,9 @@ export default function Monitor() {
   };
 
   return (
-    <div data-testid="monitor" className="h-full overflow-y-auto p-4">
-      <div className="mb-3 flex items-baseline gap-3">
-        <h1 className="text-[15px] font-semibold">Monitor</h1>
+    <div data-testid="monitor" className="page-view h-full overflow-y-auto">
+      <div className="mb-7 flex flex-wrap items-baseline gap-3">
+        <h1 className="text-[20px] font-semibold tracking-tight">Monitor</h1>
         <span className="text-[11px] text-muted">1 Hz · last {Math.round(HISTORY_TICKS / 60)} min · {hist.length} samples</span>
       </div>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">

@@ -19,7 +19,7 @@ export function useTauriEvents() {
     const flush = () => { raf = 0; const b = pending; pending = {}; useLive.getState().pushLines(b); };
     const pushLine = (runId: string, line: LogLine) => {
       (pending[runId] ??= []).push(line);
-      if (!raf) raf = requestAnimationFrame(flush);
+      if (!raf) raf = window.setTimeout(flush, 16); // not rAF: an occluded/background window would never flush
     };
     const st = useStore.getState;
 
@@ -73,6 +73,6 @@ export function useTauriEvents() {
     ipc.resourceSnapshot().then(st().setResources).catch(() => {});
     ipc.modelStatus().then(st().setModelStatus).catch(() => {});
 
-    return () => { disposed = true; unlisten.forEach((u) => u()); if (raf) cancelAnimationFrame(raf); };
+    return () => { disposed = true; unlisten.forEach((u) => u()); if (raf) clearTimeout(raf); };
   }, []);
 }

@@ -27,6 +27,10 @@ interface HomemadeStore {
   webappReady: Record<string, boolean>; // by run id, from run://webapp_ready (port accepts connections)
   modelStatus: ModelStatus | null;
   health: Record<string, HealthReport>; // by run id, from run://health or explain_run
+  createProjectOpen: boolean;
+  setCreateProjectOpen: (open: boolean) => void;
+  pendingShellAppId: string | null;
+  setPendingShellAppId: (id: string | null) => void;
   draftPath: string | null; // non-null → DraftManifestModal open for this folder
   sessionSummaryTick: number; // bumped on pty://session_summary
   setModelStatus: (m: ModelStatus | null) => void;
@@ -70,6 +74,10 @@ export const useStore = create<HomemadeStore>((set) => ({
   webappReady: {},
   modelStatus: null,
   health: {},
+  createProjectOpen: false,
+  setCreateProjectOpen: (createProjectOpen) => set({ createProjectOpen }),
+  pendingShellAppId: null,
+  setPendingShellAppId: (pendingShellAppId) => set({ pendingShellAppId }),
   draftPath: null,
   sessionSummaryTick: 0,
   setModelStatus: (modelStatus) => set({ modelStatus }),

@@ -1,92 +1,66 @@
 // App list, import (dialog + OS drop), settings entry.
 import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { ipc } from "../lib/ipc";
+import Icon, { type IconName } from "./Icon";
+import { importPaths, pickApp } from "../lib/importApp";
 import type { AppRecord } from "../lib/types";
 import { useStore, latestRun } from "../state/store";
-import { SelectButton } from "./SelectMode";
 import { useDropTarget, setFallbackDrop } from "../lib/dropRouter";
-import { errMsg, fmtBytes, isActive } from "../lib/format";
+import { fmtBytes, isActive } from "../lib/format";
 import { dedupeVenv, VENV_BADGE_MIN_BYTES } from "../lib/venv";
 import { Badge, Btn, Dropdown, MenuItem } from "./ui";
 
 export { VENV_BADGE_MIN_BYTES };
 const modeLabel: Record<string, string> = { cli: "CLI", rpc_worker: "Worker", webapp: "Web" };
 
-async function importPaths(paths: string[]) {
-  const st = useStore.getState();
-  for (const p of paths) {
-    try {
-      const app = await ipc.importApp(p);
-      st.upsertApp(app);
-      st.openApp(app.id);
-    } catch (e) { st.notify(`Import failed: ${errMsg(e)}`); }
-  }
-}
-
 export default function Sidebar() {
   const apps = useStore((s) => s.apps);
   const runs = useStore((s) => s.runs);
-  const running = apps.filter((a) => isActive(latestRun(runs, a.id)?.status));
-  const idle = apps.filter((a) => !running.includes(a));
+  const [filter, setFilter] = useState("");
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("homemade.sidebarCollapsed") === "true"; } catch { return false; } });
+  const toggleSidebar = () => setCollapsed((value) => { try { localStorage.setItem("homemade.sidebarCollapsed", String(!value)); } catch { /* preference storage unavailable */ } return !value; });
+  const createProject = useStore((s) => s.setCreateProjectOpen);
+  const filtered = apps.filter((a) => `${a.name} ${a.executionMode}`.toLowerCase().includes(filter.trim().toLowerCase()));
+  const running = filtered.filter((a) => isActive(latestRun(runs, a.id)?.status));
+  const idle = filtered.filter((a) => !running.includes(a));
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
   const dropRef = useDropTarget<HTMLElement>(importPaths);
 
   useEffect(() => { setFallbackDrop(importPaths); return () => setFallbackDrop(null); }, []);
 
-  const pick = async (directory: boolean) => {
-    const r = await open(directory ? { directory: true, title: "Import app folder" } : { multiple: false, title: "Import script", filters: [{ name: "Scripts", extensions: ["py", "js", "ts", "sh", "toml"] }] });
-    if (typeof r === "string") importPaths([r]);
-  };
-
-  const pickDraft = async () => {
-    const r = await open({ directory: true, title: "Import folder & draft manifest" });
-    if (typeof r === "string") useStore.getState().setDraftPath(r);
-  };
-
   return (
-    <aside ref={dropRef} className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
-      <div className="flex items-center justify-between px-3 pb-2 pt-3">
-        <span className="text-[13px] font-semibold">Homemade</span>
-        <Dropdown testid="import-app" label="Import app…" align="right">
+    <aside ref={dropRef} data-collapsed={collapsed} className="app-sidebar flex shrink-0 flex-col border-r border-line" aria-label="Sidebar">
+      <div className={`flex h-16 shrink-0 items-center ${collapsed ? "justify-center" : "gap-2 px-4"}`}>
+        {!collapsed && <><Icon name="home" size={18} className="text-muted" /><span className="flex-1 text-[14px] font-semibold tracking-tight">Homemade</span></>}
+        <button data-testid="sidebar-toggle" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={toggleSidebar} className="rounded-md p-1.5 text-muted hover:bg-panel-2 hover:text-fg"><Icon name="sidebar" size={17} /></button>
+      </div>
+      <nav aria-label="Workspace" className={`space-y-1 ${collapsed ? "px-2" : "px-3"}`}>
+        <Dropdown testid="import-app" label={<><Icon name="plus" size={17} />{!collapsed && <span className="flex-1 text-left">Add</span>}<span className="sr-only">{collapsed ? "Add" : ""}</span></>} buttonClassName={`sidebar-add w-full !justify-start !border-transparent !bg-transparent !py-2 !shadow-none hover:!bg-panel-2 ${collapsed ? "!justify-center !px-2" : "!px-3"}`}>
           {(close) => (<>
-            <MenuItem onClick={() => { close(); pick(true); }}>Folder…</MenuItem>
-            <MenuItem onClick={() => { close(); pick(false); }}>Script file…</MenuItem>
+            <MenuItem testid="create-project" onClick={() => { close(); createProject(true); }}><Icon name="terminal" size={15} />Create project…</MenuItem>
             <div className="my-1 border-t border-line" />
-            <MenuItem testid="import-draft" onClick={() => { close(); pickDraft(); }}>Import folder &amp; draft manifest…</MenuItem>
+            <MenuItem onClick={() => { close(); void pickApp(); }}><Icon name="folder" size={15} />Add folder…</MenuItem>
+            <MenuItem onClick={() => { close(); void pickApp(false); }}><Icon name="code" size={15} />Add script…</MenuItem>
+            <div className="my-1 border-t border-line" />
+            <MenuItem testid="import-draft" onClick={() => { close(); void pickApp(true, true); }}>Add folder &amp; draft manifest…</MenuItem>
           </>)}
         </Dropdown>
+        <NavItem icon="code" label="Apps" collapsed={collapsed} active={view === "workbench"} onClick={() => setView("workbench")} />
+        <NavItem icon="grid" label="Launch" collapsed={collapsed} testid="launch-nav" active={view === "launch"} onClick={() => setView("launch")} />
+        <NavItem icon="activity" label="Monitor" collapsed={collapsed} testid="monitor-nav" active={view === "monitor"} onClick={() => setView("monitor")} />
+      </nav>
+      <div className={`my-3 border-t border-line ${collapsed ? "mx-3" : "mx-4"}`} />
+      {!collapsed && <div className="search-box mx-4 mb-3"><Icon name="search" size={14} /><input aria-label="Search apps" placeholder="Find an app…" value={filter} onChange={(e) => setFilter(e.target.value)} />{filter && <button aria-label="Clear search" onClick={() => setFilter("")}><Icon name="close" size={13} /></button>}</div>}
+      <div className={`min-h-0 flex-1 overflow-y-auto ${collapsed ? "px-2" : "px-3"}`}>
+        {collapsed ? apps.map((app) => <AppShortcut key={app.id} app={app} />) : <>
+          {running.length > 0 && <><GroupLabel>Running <span className="font-normal text-faint">{running.length}</span></GroupLabel>{running.map((a) => <AppRow key={a.id} app={a} />)}</>}
+          {idle.length > 0 && <><GroupLabel>Apps <span className="font-normal text-faint">{idle.length}</span></GroupLabel>{idle.map((a) => <AppRow key={a.id} app={a} />)}</>}
+          {!apps.length && <p className="px-3 py-3 text-[11px] leading-5 text-faint">Add a folder or script,<br />or drop one here.</p>}
+          {apps.length > 0 && !filtered.length && <div className="px-3 py-5 text-center text-[12px] text-muted">No apps match “{filter}”.</div>}
+        </>}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5">
-        {running.length > 0 && (<>
-          <GroupLabel>Running <span className="font-normal text-faint">{running.length}</span></GroupLabel>
-          {running.map((a) => <AppRow key={a.id} app={a} />)}
-        </>)}
-        {idle.length > 0 && (<>
-          <GroupLabel>Apps <span className="font-normal text-faint">{idle.length}</span></GroupLabel>
-          {idle.map((a) => <AppRow key={a.id} app={a} />)}
-        </>)}
-        {!apps.length && (
-          <div className="m-2 rounded border border-dashed border-line p-4 text-center text-[12px] text-muted">
-            Drop a folder or script here to import it.
-          </div>
-        )}
-      </div>
-      <div className="border-t border-line p-1.5">
-        <div className="mb-1 flex items-center gap-1 px-2"><SelectButton /><span className="text-[11px] text-faint">point at anything → agent</span></div>
-        <button data-testid="launch-nav" onClick={() => setView(view === "launch" ? "workbench" : "launch")} title="Program launcher: open any program in its own window"
-          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2 ${view === "launch" ? "bg-panel-2 text-accent" : "text-fg"}`}>
-          🚀 Launch
-        </button>
-        <button data-testid="monitor-nav" onClick={() => setView(view === "monitor" ? "workbench" : "monitor")}
-          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2 ${view === "monitor" ? "bg-panel-2 text-accent" : "text-fg"}`}>
-          📈 Monitor
-        </button>
-        <button data-testid="settings" onClick={() => setView(view === "settings" ? "workbench" : "settings")}
-          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2 ${view === "settings" ? "bg-panel-2 text-accent" : "text-fg"}`}>
-          ⚙ Settings
-        </button>
+      <div className={`border-t border-line py-3 ${collapsed ? "px-2" : "px-3"}`}>
+        <NavItem icon="settings" label="Settings" collapsed={collapsed} testid="settings" active={view === "settings"} onClick={() => setView("settings")} />
       </div>
     </aside>
   );
@@ -110,13 +84,13 @@ function AppRow({ app }: { app: AppRecord }) {
   };
 
   return (
-    <div data-testid={`sidebar-app-${app.id}`} onClick={() => openApp(app.id)} title={app.rootDir}
-      className={`group mb-px cursor-default rounded px-2 py-1.5 ${selected ? "bg-accent/10" : "hover:bg-panel-2"}`}>
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? "bg-ok shadow-[0_0_6px] shadow-ok" : "bg-faint"}`} title={running ? "Running" : "Idle"} />
+    // The row's testid wraps both the name button and the venv badge, so tests (and the picker) can scope to one app.
+    <div data-testid={`sidebar-app-${app.id}`} className={`app-row mb-0.5 rounded-md ${selected ? "bg-accent-soft" : "hover:bg-panel-2"}`}>
+      <button onClick={() => openApp(app.id)} title={app.rootDir} aria-current={selected ? "page" : undefined} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? "bg-ok" : "bg-faint"}`} title={running ? "Running" : "Idle"} />
         <span className={`min-w-0 flex-1 truncate ${selected ? "text-accent" : ""}`}>{app.name}</span>
         <Badge>{modeLabel[app.executionMode] ?? app.executionMode}</Badge>
-      </div>
+      </button>
       {app.unmanagedVenvBytes > VENV_BADGE_MIN_BYTES && (
         <div className="ml-3.5 mt-1">
           <Btn data-testid="venv-dedupe" className="!px-1.5 !py-0 !text-[10px] text-warn" disabled={migrating} onClick={dedupe} title="Move this app's venv into the shared store">
@@ -126,4 +100,17 @@ function AppRow({ app }: { app: AppRecord }) {
       )}
     </div>
   );
+}
+
+function NavItem({ icon, label, active, collapsed, onClick, testid }: { icon: IconName; label: string; active: boolean; collapsed: boolean; onClick: () => void; testid?: string }) {
+  return <button data-testid={testid} aria-label={label} title={collapsed ? label : undefined} aria-current={active ? "page" : undefined} onClick={onClick} className={`nav-item flex w-full items-center gap-3 rounded-md py-2 text-left text-[12px] font-medium ${collapsed ? "justify-center px-2" : "px-3"} ${active ? "bg-accent-soft text-accent" : "text-muted hover:bg-panel-2 hover:text-fg"}`}><Icon name={icon} size={17} />{!collapsed && label}</button>;
+}
+
+function AppShortcut({ app }: { app: AppRecord }) {
+  const selected = useStore((s) => s.selectedAppId === app.id && s.view === "workbench");
+  const running = useStore((s) => isActive(latestRun(s.runs, app.id)?.status));
+  return <button aria-label={app.name} title={`${app.name}${running ? " · Running" : ""}`} onClick={() => useStore.getState().openApp(app.id)} className={`relative mb-1 flex h-10 w-full items-center justify-center rounded-md text-[11px] font-semibold ${selected ? "bg-accent-soft text-accent" : "text-muted hover:bg-panel-2"}`}>
+    {app.name.split(/[\s_-]+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase()}
+    {running && <span className="absolute right-1.5 top-1.5 h-1 w-1 rounded-full bg-ok" />}
+  </button>;
 }

@@ -10,7 +10,6 @@ import { Btn } from "./ui";
 import { terminals } from "../lib/registry";
 import { useStore } from "../state/store";
 import { cssVar, useTheme } from "../lib/theme";
-import { SelectButton } from "./SelectMode";
 
 /** The terminal is always dark, whatever the app theme: agents print ANSI colors tuned for black backgrounds, and a
  * light terminal made bright-white / bright-yellow text unreadable. Classic 16-color palette with high contrast. */
@@ -25,7 +24,7 @@ function xtermTheme() {
 
 interface Launch { agentType: AgentType; sessionId?: string; n: number }
 
-export default function AgentTerminal({ appId }: { appId: string }) {
+export default function AgentTerminal({ appId, initialAgentType }: { appId: string; initialAgentType?: AgentType }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
   const fit = useRef<FitAddon | null>(null);
@@ -45,15 +44,28 @@ export default function AgentTerminal({ appId }: { appId: string }) {
     setCurPty(id);
   };
 
-  // detect agents, then auto-launch the first one
+  // Explicit shell requests start immediately; agent discovery only fills the selector.
   useEffect(() => {
-    ipc.detectAgents().then((a) => {
-      setAgents(a);
-      const t = a[0]?.agentType ?? "custom_shell";
-      setAgentType(t);
-      setLaunch({ agentType: t, n: 0 });
-    }).catch(() => { setAgents([]); setLaunch({ agentType: "custom_shell", n: 0 }); });
-  }, []);
+    let disposed = false;
+    if (initialAgentType) {
+      setAgentType(initialAgentType);
+      setLaunch({ agentType: initialAgentType, n: 0 });
+    }
+    ipc.detectAgents().then((agents) => {
+      if (disposed) return;
+      setAgents(agents);
+      if (!initialAgentType) {
+        const type = agents[0]?.agentType ?? "custom_shell";
+        setAgentType(type);
+        setLaunch({ agentType: type, n: 0 });
+      }
+    }).catch(() => {
+      if (disposed) return;
+      setAgents([]);
+      if (!initialAgentType) setLaunch({ agentType: "custom_shell", n: 0 });
+    });
+    return () => { disposed = true; };
+  }, [initialAgentType]);
   const summaryTick = useStore((s) => s.sessionSummaryTick);
   useEffect(() => {
     ipc.listAgentSessions(appId).then(setSessions).catch(() => setSessions([]));
@@ -144,7 +156,6 @@ export default function AgentTerminal({ appId }: { appId: string }) {
         <Btn data-testid="terminal-new" onClick={() => start(false)}>{isShell ? "New shell" : "New session"}</Btn>
         {!isShell && <Btn disabled={!sessionId} onClick={() => start(true)}>Resume</Btn>}
         {exited && <Btn variant="primary" onClick={() => start(!!sessionId)}>Restart</Btn>}
-        <SelectButton />
       </div>
       <div className="min-h-0 flex-1 p-1.5" style={{ background: "#0b0d10" }}><div ref={host} className="h-full w-full" /></div>
     </div>

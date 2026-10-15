@@ -9,11 +9,11 @@ import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 
 function Section({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <section className="mb-6 rounded-lg border border-line bg-panel">
-      <div className="flex items-center justify-between border-b border-line px-3 py-2">
+    <section className="mb-5 rounded-md border border-line bg-panel">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <h2 className="text-[12px] font-semibold uppercase tracking-wider text-muted">{title}</h2>{action}
       </div>
-      <div className="p-3">{children}</div>
+      <div className="p-4">{children}</div>
     </section>
   );
 }
@@ -43,8 +43,8 @@ export default function Settings() {
 
   return (
     <div data-testid="settings-view" className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-6 py-6">
-        <h1 className="mb-1 text-lg font-semibold">Settings</h1>
+      <div className="mx-auto max-w-3xl px-6 py-6">
+        <h1 className="mb-2 text-[20px] font-semibold tracking-tight">Settings</h1>
         <p className="mb-5 text-[12px] text-muted">{home}</p>
 
         <AppearanceSection />

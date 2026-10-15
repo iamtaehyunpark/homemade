@@ -124,7 +124,7 @@ fn e(x: crate::error::Error) -> String { x.to_string() }
 /// Every method the socket understands. Names mirror the Tauri command surface (CONTRACT.md) plus `status`, `wait_run`,
 /// `open_app`, `close_window`, `show_view`.
 pub const METHODS: &[&str] = &[
-    "status", "list_apps", "get_app", "import_app", "remove_app", "reload_manifest", "save_manifest", "draft_manifest", "apply_manifest",
+    "status", "list_apps", "get_app", "import_app", "create_project", "remove_app", "reload_manifest", "save_manifest", "draft_manifest", "apply_manifest",
     "start_run", "stop_run", "force_run", "wait_run", "get_run", "list_runs", "list_active_runs", "get_run_log", "rpc_call", "build_cli_command",
     "list_artifacts", "list_presets", "save_preset", "delete_preset",
     "git_status", "git_init", "git_checkpoint", "git_revert_to",
@@ -151,6 +151,14 @@ pub async fn dispatch(st: &Arc<AppState>, method: &str, p: &Value) -> Result<Val
         }
         "import_app" => {
             let rec = crate::commands::apps::import_path(st, &res, s(p, "path")?).await.map_err(e)?;
+            st.emit("app://changed", json!({ "appId": rec.id }));
+            j(rec)
+        }
+        // Blank project: new folder + manifest with an empty exec (Run stays disabled until exec is set), registered.
+        "create_project" => {
+            let parent = crate::commands::apps::resolve_parent_dir(&st.home, opt_s(p, "parent_dir").as_deref()).map_err(e)?;
+            let root = crate::commands::apps::create_project_folder(&parent, s(p, "name")?).map_err(e)?;
+            let rec = crate::commands::apps::import_path(st, &res, &root.to_string_lossy()).await.map_err(e)?;
             st.emit("app://changed", json!({ "appId": rec.id }));
             j(rec)
         }

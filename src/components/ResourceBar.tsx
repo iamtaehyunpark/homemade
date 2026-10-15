@@ -29,7 +29,7 @@ export default function ResourceBar() {
   const current = r?.perRun.find((p) => p.appId === selectedAppId) ?? r?.perRun[0];
 
   return (
-    <footer data-testid="resource-bar" className="relative flex h-7 shrink-0 items-center gap-4 border-t border-line bg-panel px-3 text-[11px]">
+    <footer data-testid="resource-bar" className="relative flex h-9 shrink-0 items-center gap-4 border-t border-line bg-panel px-5 text-[11px]">
       {r ? (<>
         <button className="flex items-center gap-4 hover:text-fg" title="Open Monitor" onClick={() => setView("monitor")}>
           <Meter label="CPU" pct={r.cpuPct} text={`${r.cpuPct.toFixed(0)}%`} />

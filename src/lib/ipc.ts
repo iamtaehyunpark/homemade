@@ -6,6 +6,8 @@ import type * as T from "./types";
 export const ipc = {
   // apps
   listApps: () => invoke<T.AppRecord[]>("list_apps"),
+  createProject: (parentDir: string | null, name: string) => invoke<T.AppRecord>("create_project", { parentDir, name }),
+  defaultProjectsDir: () => invoke<string>("default_projects_dir"),
   importApp: (path: string) => invoke<T.AppRecord>("import_app", { path }),
   getApp: (appId: string) => invoke<T.AppRecord>("get_app", { appId }),
   reloadManifest: (appId: string) => invoke<T.AppRecord>("reload_manifest", { appId }),

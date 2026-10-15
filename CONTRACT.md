@@ -287,7 +287,9 @@ header, consistent empty states, everything "raw program" related reachable from
 
 ### Other UX (Agent B)
 - Sidebar: group apps under **Running** (active run) and **Apps**; each row shows mode badge + a tiny status dot; hovering shows root dir; the
-  import dropdown keeps `import-app` and `import-draft`. Empty state copy unchanged.
+  top **Add** menu keeps `import-app` and `import-draft` and adds `create-project`. `sidebar-toggle` collapses to a 60px rail; preference persists as `homemade.sidebarCollapsed`. Apps remain accessible by name in the rail.
+- `create_project(parent_dir: Option<String>, name: String)` → `AppRecord` (empty parent → `storage::config::projects_dir`: `[projects] dir` or `~/homemade`, created on demand; `default_projects_dir` command prefills the dialog; CLI `homemade new <name> [--in DIR]`, MCP `create_project{name, parent_dir?}`): validates a single folder name, atomically creates a new directory without overwriting existing content, writes a blank manifest (`app.exec = ""`), then registers the project. The create modal (`create-project-modal`) opens a shell panel via `pendingShellAppId`; `AgentTerminal` receives `initialAgentType: "custom_shell"` to bypass agent auto-selection. Run stays disabled until `app.exec` is set.
+- **Select element** (`select-mode`) lives in the development workspace toolbar, with an SVG pointer and a pressed state; it is absent from the sidebar and Launch.
 - Header `⋯` menu (`app-more`): Copy as CLI (`copy-cli`), Draft manifest (`draft-manifest`), Edit with Agent (`edit-with-agent`), Reveal in Finder, Remove (`remove-app`).
   `Edit with Agent` ALSO stays as a visible header button (it is a primary action) — the menu entry is the same handler.
 - Consistent empty states ("No runs yet — press Run", "No outputs for this run", "Not tracked with Git", …) and tooltips on every icon-only button.
@@ -302,7 +304,7 @@ header, consistent empty states, everything "raw program" related reachable from
   venv fixture and runs `orphan.sh` itself.
 - Launch view (`src/components/Launch.tsx`, `view: "launch"`, sidebar `launch-nav`): grid of `launch-tile[data-app]` (icon = `<root>/icon.png`
   via the asset protocol, else colored initials; `launch-running` dot), filter box; click = `openAppWindow` + `closeApp`. Windowed apps (`store.windowed`, kept by `appWindow.ts`) are hidden
-  from the grid (`launch-open-count` line). Solo windows install `installSoloCloseGuard`: close-requested → `stop_run` for the app's
+  from the grid (`launch-open-count` line). Blank projects (empty `app.exec`) are also excluded. Tiles show only large app icons and names, without development metadata; Launch hides the resource bar. Solo windows install `installSoloCloseGuard`: close-requested → `stop_run` for the app's
   active runs, wait ≤15 s for them to end, then `destroy()` — closing the window is a clean exit of the program.
 
 ### Backend additions (lead)
@@ -358,8 +360,8 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
   `get_run_log {offset}` → `{lines,next,total,active}` for incremental tailing, `capture` (macOS `screencapture -l <NSWindow
   windowNumber>` of the solo window or main; PNG under `<home>/captures`). CLI: `top`, `ps`, `signal`, `stdin`, `capture`,
   `record` (client-side JSONL of usage + new log lines), `activity`; `log --follow` uses offsets.
-- Select mode (`src/lib/selectMode.ts`, `components/SelectMode.tsx`, store `selectMode`, button `select-mode` in the sidebar
-  footer + agent toolbar, ⌘⇧C, Esc): overlay with a pointer shield (so iframes don't swallow events), hover label, click →
+- Select mode (`src/lib/selectMode.ts`, `components/SelectMode.tsx`, store `selectMode`, button `select-mode` in the workspace
+  toolbar (App.tsx header, workbench view only), ⌘⇧C, Esc): overlay with a pointer shield (so iframes don't swallow events), hover label, click →
   `describe()` builds `[ui: App › area › tab › testid "text" (app id)]` (iframes: web view URL + click offset) and `mention()`
   types it (no Enter) into the app's newest PTY via `pty_write`, else clipboard. Test: "select mode" in run.js.
 - Managed agent docs (`integrations/agent_docs.rs`): `ensure(root, app_id, manifest, home)` on import, manifest reload and

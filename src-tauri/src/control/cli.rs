@@ -10,6 +10,7 @@ homemade — drive the Homemade launcher from a shell or an agent
   homemade apps                           registered programs
   homemade app <id>                       one program with its manifest
   homemade import <path>                  register a folder (or script); infers homemade.toml when absent
+  homemade new <name> [--in DIR]          create an empty project (default location ~/homemade, or [projects] dir in config) and register it
   homemade remove <id> [--purge-scratch] [--delete-venv]
   homemade draft <path>                   draft a homemade.toml + agent prompt (never writes)
   homemade apply <path> <toml-file|->     write homemade.toml and register the folder
@@ -92,6 +93,11 @@ fn go(cmd: &str, rest: &[String], json_out: bool) -> Result<i32, String> {
             let p = abs(&arg(rest, 0, "path")?);
             let v = client::call("import_app", &json!({ "path": p }))?;
             if json_out { print(&v); } else { println!("Registered {} ({}) at {}", v["name"].as_str().unwrap_or(""), v["id"].as_str().unwrap_or(""), v["rootDir"].as_str().unwrap_or("")); }
+            Ok(0)
+        }
+        "new" => {
+            let v = client::call("create_project", &json!({ "parent_dir": flag_val(rest, "--in").map(|d| abs(&d)), "name": arg(rest, 0, "folder name")? }))?;
+            if json_out { print(&v); } else { println!("Created {} ({}). Set app.exec in {}/homemade.toml to make it runnable.", v["rootDir"].as_str().unwrap_or(""), v["id"].as_str().unwrap_or(""), v["rootDir"].as_str().unwrap_or("")); }
             Ok(0)
         }
         "remove" => { client::call("remove_app", &json!({ "app_id": arg(rest, 0, "app id")?, "purge_scratch": flag(rest, "--purge-scratch"), "delete_venv": flag(rest, "--delete-venv") }))?; println!("Removed."); Ok(0) }

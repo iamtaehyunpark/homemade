@@ -64,6 +64,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
 
   const active = isActive(run?.status);
   const start = async () => {
+    if (!manifest.app.exec.trim()) { notify("Set a run command in Manifest before running this project."); return; }
     setTouched(true);
     if (Object.keys(errors).length) return;
     setStarting(true);
@@ -115,7 +116,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
         {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""} title="Open a coding agent in this app's folder">Edit with Agent</Btn>}
         {active
           ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
-          : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting} title="⌘↵">▶ Run</Btn>}
+          : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting || !manifest.app.exec.trim()} title={manifest.app.exec.trim() ? "⌘↵" : "Set a run command in Manifest first"}>▶ Run</Btn>}
         <MoreMenu>
           {(close) => (<>
             <MenuEntry testid="copy-cli" close={close} onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</MenuEntry>
@@ -134,6 +135,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
           <Btn data-testid="queue-run-anyway" onClick={() => ipc.forceRun(run.id).catch((e) => notify(errMsg(e)))}>Run anyway</Btn>
         </div>
       )}
+      {!manifest.app.exec.trim() && <div data-testid="project-unconfigured" className="border-b border-line bg-bg px-4 py-3 text-[12px] leading-5 text-muted">Build your project in the shell. When it’s ready, set <code className="text-fg">app.exec</code> in the Manifest tab to enable Run.</div>}
       <div className="flex min-h-0 flex-1 flex-col">
         {app.executionMode === "webapp"
           ? <div className="min-h-0 flex-1"><WebappFrame app={app} run={run ?? undefined} port={active ? port : undefined} ready={webappReady} chrome={!solo} /></div>
@@ -148,7 +150,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
             <div className="flex-1" />
             {active
               ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
-              : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting} title="⌘↵">▶ Run</Btn>}
+              : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting || !manifest.app.exec.trim()} title={manifest.app.exec.trim() ? "⌘↵" : "Set a run command in Manifest first"}>▶ Run</Btn>}
           </footer>))
         : <Underbar app={app} latest={run} viewRunId={viewRunId} onViewRun={setViewRunId} values={values} />}
       {savingPreset && <PromptModal title="Save preset" label="Preset name" onClose={() => setSavingPreset(false)}

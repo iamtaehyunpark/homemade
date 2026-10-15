@@ -6,6 +6,7 @@ import Settings from "./components/Settings";
 import Monitor from "./components/Monitor";
 import Launch from "./components/Launch";
 import ResourceBar from "./components/ResourceBar";
+import Icon from "./components/Icon";
 import { Btn, Modal } from "./components/ui";
 import { useTauriEvents } from "./lib/useTauriEvents";
 import { startDropRouter } from "./lib/dropRouter";
@@ -13,7 +14,8 @@ import { ipc } from "./lib/ipc";
 import { useStore } from "./state/store";
 import AppPanel from "./components/AppPanel";
 import DraftManifestModal from "./components/DraftManifestModal";
-import SelectMode from "./components/SelectMode";
+import SelectMode, { SelectButton } from "./components/SelectMode";
+import CreateProjectModal from "./components/CreateProjectModal";
 import { installSoloCloseGuard } from "./lib/appWindow";
 
 const params = new URLSearchParams(window.location.search);
@@ -36,7 +38,7 @@ function StandaloneApp({ appId }: { appId: string }) {
       <div className="min-h-0 flex-1"><AppPanel appId={appId} solo /></div>
       <DraftManifestModal />
       <SelectMode />
-      {toast && <div className="fixed bottom-3 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>}
+      {toast && <Toast message={toast} onDismiss={() => notify(null)} solo />}
     </div>
   );
 }
@@ -49,6 +51,7 @@ function MainApp() {
   useTauriEvents();
   useEffect(() => startDropRouter(), []);
   const view = useStore((s) => s.view);
+  const createProjectOpen = useStore((s) => s.createProjectOpen);
   const confirmExit = useStore((s) => s.confirmExit);
   const setConfirmExit = useStore((s) => s.setConfirmExit);
   const toast = useStore((s) => s.toast);
@@ -64,18 +67,20 @@ function MainApp() {
     <div className="flex h-full flex-col">
       <div className="flex min-h-0 flex-1">
         <Sidebar />
-        <main className="relative min-w-0 flex-1">
-          <div className={view === "workbench" ? "h-full" : "hidden"}><Workbench /></div>
+        <main className="relative flex min-w-0 flex-1 flex-col">
+          {view === "workbench" && <header className="flex h-11 shrink-0 items-center justify-between border-b border-line bg-panel px-4"><span className="text-[12px] font-medium text-muted">Workspace</span><SelectButton /></header>}
+          <div className={view === "workbench" ? "min-h-0 flex-1" : "hidden"}><Workbench /></div>
           {view === "settings" && <Settings />}
           {view === "monitor" && <Monitor />}
           {view === "launch" && <Launch />}
         </main>
       </div>
-      <ResourceBar />
+      {view !== "launch" && <ResourceBar />}
+      {createProjectOpen && <CreateProjectModal />}
       <DraftManifestModal />
       <SelectMode />
       {toast && (
-        <div className="fixed bottom-9 right-3 z-50 max-w-sm rounded border border-line bg-panel px-3 py-2 text-[12px] shadow-xl" onClick={() => notify(null)}>{toast}</div>
+        <Toast message={toast} onDismiss={() => notify(null)} />
       )}
       {confirmExit != null && (
         <Modal testid="confirm-exit-modal" title="Quit Homemade?" onClose={() => setConfirmExit(null)}>
@@ -88,4 +93,8 @@ function MainApp() {
       )}
     </div>
   );
+}
+
+function Toast({ message, onDismiss, solo }: { message: string; onDismiss: () => void; solo?: boolean }) {
+  return <div className={`app-toast fixed right-4 z-50 max-w-sm ${solo ? "bottom-4" : "bottom-12"}`}><span role="status" className="min-w-0 break-words">{message}</span><button onClick={onDismiss} aria-label="Dismiss notification" className="rounded p-1 text-muted hover:bg-panel-2"><Icon name="close" size={14} /></button></div>;
 }

@@ -60,6 +60,54 @@ pub async fn import_app(state: St<'_>, app: tauri::AppHandle, path: String) -> R
     import_path(state.inner(), &super::resources_dir(&app), &path).await
 }
 
+/// Create a project without choosing a language or running any code.
+/// An empty exec keeps Run disabled until the user or agent configures it.
+#[tauri::command]
+pub async fn create_project(state: St<'_>, app: tauri::AppHandle, parent_dir: Option<String>, name: String) -> Result<AppRecord> {
+    let parent = resolve_parent_dir(&state.home, parent_dir.as_deref())?;
+    let root = create_project_folder(&parent, &name)?;
+    import_path(state.inner(), &super::resources_dir(&app), &root.to_string_lossy()).await
+        .map_err(|e| crate::error::Error::Msg(format!("Created {} but could not add it to Homemade: {e}", root.display())))
+}
+
+/// Empty/missing parent → the default projects dir (`~/homemade` unless `[projects] dir` is configured), created on demand.
+pub fn resolve_parent_dir(home: &Path, parent_dir: Option<&str>) -> Result<PathBuf> {
+    match parent_dir.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(p) => Ok(PathBuf::from(p)),
+        None => { let d = crate::storage::config::projects_dir(home); std::fs::create_dir_all(&d)?; Ok(d) }
+    }
+}
+
+/// The default projects dir as a string (for the create dialog's prefilled location).
+#[tauri::command]
+pub async fn default_projects_dir(state: St<'_>) -> Result<String> { Ok(crate::storage::config::projects_dir(&state.home).to_string_lossy().into_owned()) }
+
+pub fn create_project_folder(parent: &Path, name: &str) -> Result<PathBuf> {
+    let name = name.trim();
+    if name.is_empty() || name == "." || name == ".." || name.chars().any(|c| c == '/' || c == '\\' || c == ':' || c.is_control()) {
+        return err("Enter a folder name without slashes or special characters");
+    }
+    let parent = parent.canonicalize()?;
+    if !parent.is_dir() { return err("Choose an existing folder as the project location"); }
+    let root = parent.join(name);
+    // create_dir is atomic and never reuses or overwrites an existing folder.
+    std::fs::create_dir(&root).map_err(|e| crate::error::Error::Msg(format!("Cannot create {}: {e}", root.display())))?;
+    let manifest = crate::manifest::schema::HomemadeManifest {
+        app: crate::manifest::schema::AppConfig {
+            id: slugify(name), name: name.to_string(), version: "0.1.0".into(), description: None,
+            mode: crate::manifest::schema::ExecutionMode::Cli, exec: String::new(), cwd: ".".into(), env_manager: "system".into(),
+        },
+        ui: crate::manifest::schema::UiConfig { entry: None, default_layout: "tab".into() },
+        resources: Default::default(), environment: Default::default(), artifacts: Default::default(), inputs: Default::default(),
+    };
+    if let Err(e) = write_manifest(&root, &manifest) {
+        // Only remove our folder if it is still empty.
+        let _ = std::fs::remove_dir(&root);
+        return Err(e);
+    }
+    Ok(root)
+}
+
 /// Body of `import_app`, shared with `apply_manifest`: infer/write manifest, upsert the row, start the watcher.
 pub async fn import_path(state: &std::sync::Arc<AppState>, res: &Path, path: &str) -> Result<AppRecord> {
     let p = PathBuf::from(path);
@@ -174,4 +222,33 @@ pub async fn save_manifest(state: St<'_>, app: tauri::AppHandle, app_id: String,
     let Some(row) = row else { return err(format!("Unknown app: {app_id}")) };
     std::fs::write(Path::new(&row.root_dir).join("homemade.toml"), &toml_text)?;
     reload_manifest_inner(&state, &super::resources_dir(&app), &app_id)
+}
+
+#[cfg(test)]
+mod project_tests {
+    use super::*;
+
+    #[test]
+    fn creates_blank_project_and_refuses_overwrite() {
+        let parent = std::env::temp_dir().join(format!("homemade-project-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&parent).unwrap();
+        let root = create_project_folder(&parent, "My project").unwrap();
+        let bytes = std::fs::read_to_string(root.join("homemade.toml")).unwrap();
+        let manifest = HomemadeManifest::parse(&bytes).unwrap();
+        assert_eq!(manifest.app.name, "My project");
+        assert!(manifest.app.exec.is_empty());
+        assert_eq!(manifest.ui.default_layout, "tab");
+        std::fs::write(root.join("keep.txt"), "existing content").unwrap();
+        assert!(create_project_folder(&parent, "My project").is_err());
+        assert_eq!(std::fs::read_to_string(root.join("keep.txt")).unwrap(), "existing content");
+        assert_eq!(std::fs::read_to_string(root.join("homemade.toml")).unwrap(), bytes);
+        std::fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn rejects_names_that_escape_the_chosen_folder() {
+        for name in ["", " ", ".", "..", "../outside", "/tmp/outside", "nested/folder", "nested\\folder", "bad:name", "bad\nname"] {
+            assert!(create_project_folder(&std::env::temp_dir(), name).is_err(), "accepted {name:?}");
+        }
+    }
 }

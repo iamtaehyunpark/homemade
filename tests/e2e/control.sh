@@ -22,6 +22,8 @@ chk "cli git status"        '$B git hello-cli status | grep -q "initialized"'
 chk "cli presets save/list" '$B preset-save hello-cli CliPreset name=P >/dev/null && $B presets hello-cli | grep -q "CliPreset"'
 chk "cli view launch"       '$B view launch'
 chk "cli open hello-cli"    '$B open hello-cli'
+chk "cli new creates blank project" 'd=$(mktemp -d) && $B new blank-cli --in "$d" | grep -q "Created" && grep -q "exec = \"\"" "$d/blank-cli/homemade.toml" && ! $B new blank-cli --in "$d" 2>/dev/null && $B remove blank-cli >/dev/null'
+chk "cli new defaults to projects dir"  'printf "[projects]\ndir = \"%s\"\n" "$E/home/projects" >> $E/home/config.toml && $B new default-cli | grep -q "$E/home/projects/default-cli" && $B remove default-cli >/dev/null'
 # Monitoring + raw control against a live program: webapp-app serves for a while.
 wrid=$($B run webapp-app 2>/dev/null | head -1)
 sleep 3

@@ -128,7 +128,7 @@ Register the MCP server once:
 ```sh
 claude mcp add homemade -- /Applications/Homemade.app/Contents/MacOS/homemade --mcp
 ```
-Tools (arguments in parentheses): `status`, `launch_gui`, `list_apps`, `get_app(app_id)`, `import_app(path)`,
+Tools (arguments in parentheses): `status`, `launch_gui`, `list_apps`, `get_app(app_id)`, `import_app(path)`, `create_project(name, parent_dir?)` (default `~/homemade/<name>`),
 `remove_app(app_id)`, `draft_manifest(path)` → `apply_manifest(path, toml)`, `save_manifest(app_id, toml)`,
 `validate_manifest(toml_text)`, `start_run(app_id, inputs)` → `wait_run(run_id)` (returns exit_code + log_tail),
 `stop_run(run_id)`, `get_run(run_id)`, `list_runs(app_id)`, `list_active_runs`, `get_run_log(run_id)`, `last_failed_run(app_id)`,
@@ -158,7 +158,7 @@ into your session. Treat it as live ground truth and react (inspect the log, fix
 same picture on demand: current run with live log tail, last result, latest outputs. (`[agents] notify_runs = false` in
 `~/.homemade/config.toml` turns the messages off.)
 
-The user can also point at things: in select mode they click an element in the launcher and a reference like
+The user can also point at things: with **Select element** (workspace toolbar, ⌘⇧C) they click an element in the launcher and a reference like
 `[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback…" (app kogrammar)]` appears in your input, followed by their
 request. Resolve it with `app_activity` / `get_run_log` / `list_artifacts`; a `web view … at (x,y)` reference points into the
 program's own UI — `capture(app_id)` gives you a screenshot to look at. For deeper inspection of the running program use

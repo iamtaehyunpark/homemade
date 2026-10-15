@@ -26,3 +26,17 @@ pub fn get_table(table: &toml::Table, name: &str) -> std::collections::HashMap<S
         .map(|t| t.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect())
         .unwrap_or_default()
 }
+
+/// Where new projects go when the user does not pick a folder: `[projects] dir` in config.toml (with `~` expanded),
+/// else `~/homemade`. Created on first use, not here.
+pub fn projects_dir(home: &Path) -> PathBuf {
+    let cfg = load(home);
+    let configured = cfg.get("projects").and_then(|t| t.get("dir")).and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
+    let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    match configured {
+        Some(d) if d == "~" => user_home,
+        Some(d) if d.starts_with("~/") => user_home.join(&d[2..]),
+        Some(d) => PathBuf::from(d),
+        None => user_home.join("homemade"),
+    }
+}

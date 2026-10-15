@@ -148,9 +148,8 @@ await t("env-app: secrets vault, redaction, alias expansion, args input, stderr 
   ok(fin.logTail.includes("ALIAS=/tmp/e2e-alias/sub"), "alias not expanded");
   ok(fin.logTail.includes("ARGS=--alpha two words"), "args input not passed");
   ok(fin.logTail.includes("[stderr] this goes to stderr"), "stderr marker missing");
-  await sleep(500);
-  const errLine = qa('[data-testid="log-line"][data-stream="stderr"]');
-  ok(errLine.length >= 1, "no stderr-colored line in console");
+  const errLine = await H.waitFor(() => qa('[data-testid="log-line"][data-stream="stderr"]').length >= 1, 8000).catch(() => false);
+  ok(errLine, "no stderr-colored line in console; lines=" + JSON.stringify(qa('[data-testid="log-line"]').map((l) => l.dataset.stream + ":" + l.textContent.slice(0, 30))) + " tab=" + q('[data-testid="underbar"]')?.dataset.tab + " panels=" + qa("[data-app-panel]").map((p) => p.dataset.appPanel).join(",") + " live=" + ((H.live.getState().runs[run.id] || {}).lines || []).length);
   const arts = await H.ipc.listArtifacts(a.id, run.id);
   const kinds = arts.map((x) => x.kind + ":" + x.filePath.split("/").pop());
   ok(kinds.includes("output:result.json") && kinds.includes("scratch:tmp_scratch.part"), "artifact classification: " + kinds);
@@ -171,7 +170,7 @@ await t("venv-app: unmanaged venv scan + dedupe migration + run", async () => {
   ok(bytes > 50 * 1024 * 1024, "scan bytes " + bytes + " (fixture must exceed the 50 MB badge threshold)");
   await H.openApp(a.id);
   const badge = () => q('[data-testid="sidebar-app-' + a.id + '"] [data-testid="venv-dedupe"]'); // scoped: other imported apps may have their own badge
-  ok(badge(), "no dedupe badge");
+  ok(await H.waitFor(() => badge(), 5000).catch(() => null), "no dedupe badge");
   const after = await H.ipc.migrateVenv(a.id);
   await R("  venv before=" + bytes + " after=" + after);
   const rescan = await H.ipc.scanVenv(a.id);
