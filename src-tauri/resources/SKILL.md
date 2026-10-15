@@ -153,8 +153,8 @@ So from an agent session you can run and verify the app yourself (`start_run` + 
 instead of asking the user to press Run.
 
 While you work inside a Homemade agent session, the launcher keeps you posted: whenever a run of your app starts, finishes
-or gets a failure diagnosis (including runs the user starts from the window), a message beginning with `[homemade]` is typed
-into your session. Treat it as live ground truth and react (inspect the log, fix, re-run). `app_activity(app_id)` returns the
+or gets a failure diagnosis (including runs the user starts from the window), a message beginning with `[homemade]` is offered
+to the user, who can send it into your session with one click. Treat it as live ground truth and react (inspect the log, fix, re-run). `app_activity(app_id)` returns the
 same picture on demand: current run with live log tail, last result, latest outputs. (`[agents] notify_runs = false` in
 `~/.homemade/config.toml` turns the messages off.)
 

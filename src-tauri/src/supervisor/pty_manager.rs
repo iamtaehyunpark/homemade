@@ -319,25 +319,10 @@ pub fn write(state: &AppState, pty_id: &str, data: &str) -> Result<()> {
 pub fn inject_notice(state: Arc<AppState>, app_id: &str, text: String) {
     let cfg = crate::storage::config::load(&state.home);
     if !crate::storage::config::get_bool(&cfg, "agents", "notify_runs", true) { return; }
-    let targets: Vec<Arc<ActivePty>> = state.active_ptys.iter()
-        .filter(|e| e.value().info.app_id == app_id && e.value().notices)
-        .map(|e| e.value().clone()).collect();
-    if targets.is_empty() { return; }
-    let line = format!("{}\r", text.replace(['\r', '\n'], " ⏎ "));
-    for p in targets {
-        let (st, line) = (state.clone(), line.clone());
-        tauri::async_runtime::spawn(async move {
-            let deadline = now_ms() + 30_000;
-            loop {
-                if !st.active_ptys.contains_key(&p.info.pty_id) { return; }
-                let idle = now_ms() - p.last_input.load(std::sync::atomic::Ordering::Relaxed);
-                if idle >= 3_000 { break; }
-                if now_ms() > deadline { return; }
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            }
-            let mut w = p.writer.lock().unwrap();
-            let _ = w.write_all(line.as_bytes()).and_then(|_| w.flush());
-        });
+    // Nothing is typed into the session by itself: the terminal shows the notice with a Send button and the user decides.
+    let text = text.replace(['\r', '\n'], " | ");
+    for e in state.active_ptys.iter().filter(|e| e.value().info.app_id == app_id && e.value().notices) {
+        state.emit("pty://notice", serde_json::json!({ "ptyId": e.key(), "appId": app_id, "text": text }));
     }
 }
 

@@ -82,7 +82,7 @@ export const ipc = {
 export const events = {
   runStdout: "run://stdout", runStderr: "run://stderr", runProgress: "run://progress", runMetric: "run://metric",
   runArtifact: "run://artifact", runPort: "run://port", runWebappReady: "run://webapp_ready", runStatus: "run://status", runQueued: "run://queued", runWorkerReady: "run://worker_ready",
-  ptyData: "pty://data", ptyExit: "pty://exit", ptySessionSummary: "pty://session_summary",
+  ptyData: "pty://data", ptyExit: "pty://exit", ptyNotice: "pty://notice", ptySessionSummary: "pty://session_summary",
   runHealth: "run://health", modelStatus: "model://status",
   appChanged: "app://changed", appUiReload: "app://ui_reload", confirmExit: "app://confirm-exit", notice: "app://notice",
   resourcesTick: "resources://tick", storageProgress: "storage://progress",

@@ -25,7 +25,7 @@ You can drive the launcher yourself instead of asking the user to click Run:
   `homemade top|ps|signal|stdin|capture|record`, `homemade help`).
 - MCP: `{exe} --mcp` (config file `{mcp}`; tools: start_run, wait_run, app_activity, get_run_log, last_failed_run, explain_run,
   list_artifacts, apply_manifest, git_checkpoint, open_app, capture, …). Register once: `claude mcp add homemade -- {exe} --mcp`.
-- Inside Homemade sessions these are already on PATH / connected, and `[homemade] …` status lines arrive when runs start or finish.
+- Inside Homemade sessions these are already on PATH / connected, and the user can forward `[homemade]` status lines (run started / finished / diagnosis) into the session.
 {END}",
         mode = m.app.mode.as_str(), exec = m.app.exec,
         inputs = if inputs.is_empty() { "none".to_string() } else { inputs.join(", ") },

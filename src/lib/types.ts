@@ -65,6 +65,7 @@ export interface RunMetricEvent { runId: string; data: Record<string, unknown> }
 export interface RunPortEvent { runId: string; port: number }
 export interface PtyDataEvent { ptyId: string; data: string }
 export interface PtyExitEvent { ptyId: string; exitCode: number | null }
+export interface PtyNoticeEvent { ptyId: string; appId: string; text: string }
 export interface RunHealthEvent { runId: string; severity: HealthSeverity; message: string }
 export interface PtySessionSummaryEvent { sessionId: string; title: string }
 export interface ModelStatusEvent { available: boolean; reason: string | null }

@@ -320,8 +320,8 @@ async fn finalize(
         } else {
             let last: Vec<&str> = tail.lines().rev().filter(|l| !l.trim().is_empty()).take(4).collect();
             let last: Vec<&str> = last.into_iter().rev().collect();
-            format!("[homemade] Run {short} of {} {} after {secs:.1}s (exit {}). Last lines: {} — fix it, then verify with start_run + wait_run.", run.app_id,
-                final_status.to_uppercase(), code.map(|c| c.to_string()).unwrap_or_else(|| "?".into()), last.join(" ⏎ "))
+            format!("[homemade] Run {short} of {} {} after {secs:.1}s (exit {}). Last lines: {}. Fix it, then verify with start_run + wait_run.", run.app_id,
+                final_status.to_uppercase(), code.map(|c| c.to_string()).unwrap_or_else(|| "?".into()), last.join(" | "))
         };
         crate::supervisor::pty_manager::inject_notice(state.clone(), &run.app_id, notice);
     }

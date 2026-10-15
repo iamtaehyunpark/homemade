@@ -4,7 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { events, ipc, on } from "../lib/ipc";
-import type { AgentSessionRecord, AgentType, DetectedAgent, PtyDataEvent, PtyExitEvent } from "../lib/types";
+import type { AgentSessionRecord, AgentType, DetectedAgent, PtyDataEvent, PtyExitEvent, PtyNoticeEvent } from "../lib/types";
 import { errMsg, relTime } from "../lib/format";
 import { Btn } from "./ui";
 import { terminals } from "../lib/registry";
@@ -37,6 +37,8 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
   const [launch, setLaunch] = useState<Launch | null>(null);
   const [exited, setExited] = useState(false);
   const [curPty, setCurPty] = useState<string | null>(null);
+  // `[homemade]` status lines are never typed by themselves: they wait here until the user presses Send.
+  const [notices, setNotices] = useState<string[]>([]);
   const bindPty = (id: string | null) => {
     if (ptyId.current) terminals.delete(ptyId.current);
     ptyId.current = id;
@@ -95,6 +97,9 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
       if (p.ptyId === ptyId.current) t.write(p.data);
       else if (!ptyId.current) { const m = pendingData.current; m.set(p.ptyId, [...(m.get(p.ptyId) ?? []), p.data]); }
     }).then((u) => (disposed ? u() : un.push(u)));
+    on<PtyNoticeEvent>(events.ptyNotice, (p) => {
+      if (p.ptyId === ptyId.current) setNotices((n) => [...n.slice(-4), p.text]);
+    }).then((u) => (disposed ? u() : un.push(u)));
     on<PtyExitEvent>(events.ptyExit, (p) => {
       if (p.ptyId !== ptyId.current) return;
       t.write(`\r\n\x1b[90m[process exited${p.exitCode != null ? ` with code ${p.exitCode}` : ""}]\x1b[0m\r\n`);
@@ -128,6 +133,7 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
     if (prev) ipc.ptyKill(prev).catch(() => {});
     t.reset();
     setExited(false);
+    setNotices([]);
     pendingData.current.clear();
     try { fit.current?.fit(); } catch { /* ignore */ }
     ipc.ptySpawn(appId, launch.agentType, { sessionId: launch.sessionId, cols: t.cols, rows: t.rows }).then((info) => {
@@ -162,6 +168,18 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
         {!isShell && <Btn disabled={!sessionId} onClick={() => start(true)}>Resume</Btn>}
         {exited && <Btn variant="primary" onClick={() => start(!!sessionId)}>Restart</Btn>}
       </div>
+      {notices.length > 0 && (
+        <div data-testid="terminal-notices" className="flex flex-col gap-1 border-b border-line bg-panel-2 px-2 py-1.5">
+          {notices.map((text, i) => (
+            <div key={i} className="flex items-center gap-2 text-[11px]">
+              <span className="min-w-0 flex-1 truncate font-mono text-muted" title={text}>{text}</span>
+              <Btn data-testid="notice-send" variant="primary" className="!px-2 !py-0.5 !text-[11px]" disabled={!curPty}
+                onClick={() => { if (curPty) ipc.ptyWrite(curPty, text + "\r").catch(() => {}); setNotices((n) => n.filter((_, j) => j !== i)); }}>Send to agent</Btn>
+              <button aria-label="Dismiss" className="text-muted hover:text-fg" onClick={() => setNotices((n) => n.filter((_, j) => j !== i))}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="min-h-0 flex-1 p-1.5" style={{ background: "#0b0d10" }}><div ref={host} className="h-full w-full" /></div>
     </div>
   );

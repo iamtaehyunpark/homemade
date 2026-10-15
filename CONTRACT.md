@@ -350,9 +350,7 @@ The user wants a bright UI. Replace the hard-coded dark palette with semantic to
   `-c mcp_servers.homemade.*`; interactive custom shells print `control::hint_line()` first. The shim is now installed for
   every home (test homes included).
 - Agent terminal (`AgentTerminal.tsx`): always dark (`#0b0d10` bg, 16-color palette) regardless of the app theme — ANSI output from agents assumes a black background.
-- Agent awareness: `pty_manager::inject_notice(state, app_id, text)` types `[homemade] Run … STARTED/SUCCEEDED/FAILED` and
-  `Diagnosis …` lines (+ Enter) into every PTY of that app with `notices` (agents and custom commands; not plain shells), only
-  after 3 s without UI keystrokes (`ActivePty.last_input`, waits ≤30 s). Config `[agents] notify_runs` (default true).
+- Agent awareness: `pty_manager::inject_notice(state, app_id, text)` emits `pty://notice {ptyId, appId, text}` for the app's agent PTYs (`ActivePty.notices`); the terminal shows it with a Send button and only then writes `text + \r`. Config `[agents] notify_runs` (default true).
   `app_activity` (control method, MCP tool, `homemade activity`, Tauri command) = one-call catch-up. The Claude system prompt
   explains both.
 - Program monitoring/control (control methods + MCP tools + CLI): `app_usage` (1 Hz history from `AppState.usage_history`,
