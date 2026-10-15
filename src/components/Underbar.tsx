@@ -1,5 +1,6 @@
 // The Underbar: one resizable, collapsible bottom card per app panel holding every per-program surface as tabs.
 // Inactive tabs stay mounted (hidden attribute) so scroll/state survive and E2E can reach their elements.
+import { SelectButton } from "./SelectMode";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ipc } from "../lib/ipc";
 import type { AppRecord, GitStatus, RunRecord } from "../lib/types";
@@ -129,6 +130,7 @@ export default function Underbar({ app, latest, viewRunId, onViewRun, values }: 
           </button>
         ))}
         <div className="flex-1" />
+        {app.executionMode === "webapp" && <SelectButton />}
         {latest && <RunStatus status={latest.status} exitCode={latest.exitCode} />}
         <button className="ml-1 rounded px-1.5 text-muted hover:bg-panel-2 hover:text-fg" title={p.collapsed ? "Expand" : "Collapse"} aria-label={p.collapsed ? "Expand" : "Collapse"}
           onClick={() => setP((x) => ({ ...x, collapsed: !x.collapsed }))}>{p.collapsed ? "⤒" : "⤓"}</button>

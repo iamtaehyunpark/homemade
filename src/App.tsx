@@ -14,7 +14,7 @@ import { ipc } from "./lib/ipc";
 import { useStore } from "./state/store";
 import AppPanel from "./components/AppPanel";
 import DraftManifestModal from "./components/DraftManifestModal";
-import SelectMode, { SelectButton } from "./components/SelectMode";
+import SelectMode from "./components/SelectMode";
 import CreateProjectModal from "./components/CreateProjectModal";
 import { installSoloCloseGuard } from "./lib/appWindow";
 
@@ -68,7 +68,7 @@ function MainApp() {
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <main className="relative flex min-w-0 flex-1 flex-col">
-          {view === "workbench" && <header className="flex h-11 shrink-0 items-center justify-between border-b border-line bg-panel px-4"><span className="text-[12px] font-medium text-muted">Workspace</span><SelectButton /></header>}
+          {view === "workbench" && <header className="flex h-11 shrink-0 items-center border-b border-line bg-panel px-4"><span className="text-[12px] font-medium text-muted">Workspace</span></header>}
           <div className={view === "workbench" ? "min-h-0 flex-1" : "hidden"}><Workbench /></div>
           {view === "settings" && <Settings />}
           {view === "monitor" && <Monitor />}
