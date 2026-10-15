@@ -79,7 +79,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
     if (!containerApi || !api) return;
     const p = containerApi.getPanel(agentId(appId));
     if (p) { p.api.close(); setAgentOpen(false); return; }
-    containerApi.addPanel({ id: agentId(appId), component: "agent", title: `Agent · ${app.name}`, params: { appId }, position: { direction: "left", referencePanel: api.id } });
+    containerApi.addPanel({ id: agentId(appId), component: "agent", title: `Shell · ${app.name}`, params: { appId, initialAgentType: "custom_shell" }, position: { direction: "left", referencePanel: api.id } });
     setAgentOpen(true);
   };
   const loadPreset = (p: PresetRecord) => {
@@ -113,7 +113,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
           </>)}
         </Dropdown>
         {containerApi && <Btn data-testid="open-in-window" onClick={() => { openAppWindow(app); useStore.getState().closeApp(app.id); }} title="Open in its own window: just the program, no panels. Closing that window exits the program; ⌘⇧D there brings it back here. Tip: drag this tab out of the dock to do the same.">⧉ Window</Btn>}
-        {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""} title="Open a coding agent in this app's folder">Edit with Agent</Btn>}
+        {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""} title="Open a shell in this app's folder; start an agent from there or via the selector">Edit with Agent</Btn>}
         {active
           ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
           : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting || !manifest.app.exec.trim()} title={manifest.app.exec.trim() ? "⌘↵" : "Set a run command in Manifest first"}>▶ Run</Btn>}

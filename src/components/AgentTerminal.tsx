@@ -76,7 +76,12 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
     const t = new Terminal({
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, cursorBlink: true, allowProposedApi: true, scrollback: 5000,
       theme: xtermTheme(),
+      // Option acts as Meta (⌥b / ⌥f word moves, ⌥⏎ newline in agents) instead of typing ∫ ƒ.
+      macOptionIsMeta: true,
     });
+    // ⌘-combos belong to the launcher (⌘1…6 tabs, ⌘⇧C select, ⌘⇧D dock, ⌘C/⌘V native copy/paste); everything else —
+    // Esc, Option/Meta, Ctrl — is the program's and must reach the PTY untouched.
+    t.attachCustomKeyEventHandler((e) => !e.metaKey);
     const f = new FitAddon();
     t.loadAddon(f);
     t.open(host.current!);
