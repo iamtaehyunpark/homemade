@@ -7,6 +7,7 @@ import { events, ipc, on } from "../lib/ipc";
 import type { AgentSessionRecord, AgentType, DetectedAgent, PtyDataEvent, PtyExitEvent, PtyNoticeEvent } from "../lib/types";
 import { errMsg, relTime } from "../lib/format";
 import { Btn } from "./ui";
+import Icon from "./Icon";
 import { terminals } from "../lib/registry";
 import { useStore } from "../state/store";
 import { cssVar, useTheme } from "../lib/theme";
@@ -85,6 +86,24 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
     // ⌘-combos belong to the launcher (⌘1…6 tabs, ⌘⇧C select, ⌘⇧D dock, ⌘C/⌘V native copy/paste); everything else —
     // Esc, Option/Meta, Ctrl — is the program's and must reach the PTY untouched.
     t.attachCustomKeyEventHandler((e) => !e.metaKey);
+    // WebKit on macOS drives the Korean (and other) IMEs without composition events: a syllable arrives as `insertText`
+    // "ㅎ" followed by `insertReplacementText` "하", "한" as it is built. xterm forwards only the first jamo and ignores
+    // the replacements, so Korean came out as bare consonants. Mirror those edits instead: delete what the IME replaced,
+    // then send the new text. Plain ASCII keys keep xterm's own keydown path.
+    const ta = t.textarea!, taHost = ta.parentElement!;
+    let before = "";
+    const imeEdit = (e: Event) => { const ie = e as InputEvent; return ie.inputType === "insertReplacementText" || (ie.inputType === "insertText" && /[^\x00-\x7f]/.test(ie.data ?? "")); };
+    taHost.addEventListener("beforeinput", (e) => { if (imeEdit(e)) before = ta.value; }, true);
+    taHost.addEventListener("input", (e) => {
+      if (!imeEdit(e)) return;
+      e.stopPropagation();
+      const a = Array.from(before), b = Array.from(ta.value);
+      let p = 0;
+      while (p < a.length && p < b.length && a[p] === b[p]) p++;
+      const out = "\x7f".repeat(a.length - p) + b.slice(p).join("");
+      if (out) t.input(out, true);
+    }, true);
+    taHost.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).keyCode === 229) e.stopPropagation(); }, true); // IME placeholder key: nothing for xterm to do
     const f = new FitAddon();
     t.loadAddon(f);
     t.open(host.current!);
@@ -181,7 +200,7 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
                 <span className="min-w-0 flex-1 truncate font-mono text-muted" title={n.text}>{n.text}</span>
                 <Btn data-testid="notice-send" variant="primary" className="!px-2 !py-0.5 !text-[11px]" disabled={!curPty}
                   onClick={() => { if (curPty) ipc.ptyWrite(curPty, n.text + "\r").catch(() => {}); dismiss(n.id); }}>Send to agent</Btn>
-                <button aria-label="Dismiss" className="text-muted hover:text-fg" onClick={() => dismiss(n.id)}>×</button>
+                <button aria-label="Dismiss" className="rounded p-1 text-muted hover:bg-panel-2 hover:text-fg" onClick={() => dismiss(n.id)}><Icon name="close" size={14} /></button>
               </div>
             ))}
           </div>

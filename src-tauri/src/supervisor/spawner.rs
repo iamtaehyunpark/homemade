@@ -48,15 +48,67 @@ pub fn load_user_login_env() -> HashMap<String, String> {
     m.insert("PYTHONUNBUFFERED".into(), "1".into());
     m.insert("FORCE_COLOR".into(), "1".into());
     m.insert("PYTHONIOENCODING".into(), "utf-8".into());
-    // A GUI launch has no locale, so zsh's line editor treats input bytewise and multibyte text (Korean, emoji) breaks.
+    // A GUI launch can have no locale, so zsh's line editor treats multibyte text bytewise.
     if !["LC_ALL", "LC_CTYPE", "LANG"].iter().any(|k| m.get(*k).is_some_and(|v| !v.is_empty())) {
-        let lang = std::process::Command::new("defaults").args(["read", "-g", "AppleLocale"]).output().ok()
-            .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .filter(|l| l.len() >= 5 && l.is_ascii()).map(|l| format!("{}.UTF-8", l.split('@').next().unwrap_or(&l)))
-            .unwrap_or_else(|| "en_US.UTF-8".into());
-        m.insert("LANG".into(), lang);
+        let apple_locale = if cfg!(target_os = "macos") {
+            std::process::Command::new("defaults").args(["read", "-g", "AppleLocale"]).output().ok()
+                .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        } else { None };
+        let available = std::process::Command::new("/usr/bin/locale").arg("-a").output().ok()
+            .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+        if let Some(lang) = default_utf8_locale(apple_locale.as_deref(), &available) {
+            m.insert("LANG".into(), lang);
+        }
     }
     m
+}
+
+/// AppleLocale is an ICU preference, not necessarily an installed POSIX locale: en_KR is one
+/// example. An unsupported LANG silently leaves zsh using ASCII despite its .UTF-8 suffix.
+fn default_utf8_locale(apple_locale: Option<&str>, available: &str) -> Option<String> {
+    let locales: Vec<&str> = available.lines().map(str::trim).filter(|l| {
+        l.split('@').next().unwrap_or(l).replace('-', "").to_ascii_lowercase().ends_with(".utf8")
+    }).collect();
+    let preferred = apple_locale.map(|l| format!("{}.UTF-8", l.split(['@', '.']).next().unwrap_or(l)));
+    for candidate in preferred.as_deref().into_iter().chain(["en_US.UTF-8", "C.UTF-8"]) {
+        let normalized = candidate.replace('-', "").to_ascii_lowercase();
+        if let Some(locale) = locales.iter().find(|l| l.replace('-', "").to_ascii_lowercase() == normalized) {
+            return Some((*locale).to_string());
+        }
+    }
+    locales.first().map(|l| (*l).to_string())
+}
+
+#[cfg(test)]
+mod locale_tests {
+    use super::default_utf8_locale;
+
+    #[test]
+    fn unsupported_apple_region_uses_an_installed_utf8_locale() {
+        let available = "C\nPOSIX\nen_US.UTF-8\nko_KR.UTF-8\n";
+        assert_eq!(default_utf8_locale(Some("en_KR"), available).as_deref(), Some("en_US.UTF-8"));
+        assert_eq!(default_utf8_locale(Some("ko_KR@calendar=gregorian"), available).as_deref(), Some("ko_KR.UTF-8"));
+    }
+
+    #[test]
+    fn fallback_accepts_system_utf8_spelling_and_never_invents_a_locale() {
+        assert_eq!(default_utf8_locale(None, "C\nC.utf8\n").as_deref(), Some("C.utf8"));
+        assert_eq!(default_utf8_locale(Some("en_KR"), "C\nko_KR.UTF-8\n").as_deref(), Some("ko_KR.UTF-8"));
+        assert_eq!(default_utf8_locale(None, "C\nPOSIX\n"), None);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn fallback_makes_zsh_count_korean_characters_instead_of_utf8_bytes() {
+        let available = std::process::Command::new("/usr/bin/locale").arg("-a").output().unwrap();
+        assert!(available.status.success());
+        let lang = default_utf8_locale(Some("en_KR"), &String::from_utf8(available.stdout).unwrap()).unwrap();
+        let output = std::process::Command::new("/bin/zsh")
+            .env_clear().env("LANG", lang).args(["-df", "-c", "text='한글'; print -r -- ${#text}"])
+            .output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), "2");
+    }
 }
 
 /// Boxed as `dyn Future + Send` to break the launch -> scheduler -> launch auto-trait cycle.
