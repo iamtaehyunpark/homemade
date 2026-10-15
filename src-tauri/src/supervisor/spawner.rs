@@ -48,6 +48,14 @@ pub fn load_user_login_env() -> HashMap<String, String> {
     m.insert("PYTHONUNBUFFERED".into(), "1".into());
     m.insert("FORCE_COLOR".into(), "1".into());
     m.insert("PYTHONIOENCODING".into(), "utf-8".into());
+    // A GUI launch has no locale, so zsh's line editor treats input bytewise and multibyte text (Korean, emoji) breaks.
+    if !["LC_ALL", "LC_CTYPE", "LANG"].iter().any(|k| m.get(*k).is_some_and(|v| !v.is_empty())) {
+        let lang = std::process::Command::new("defaults").args(["read", "-g", "AppleLocale"]).output().ok()
+            .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|l| l.len() >= 5 && l.is_ascii()).map(|l| format!("{}.UTF-8", l.split('@').next().unwrap_or(&l)))
+            .unwrap_or_else(|| "en_US.UTF-8".into());
+        m.insert("LANG".into(), lang);
+    }
     m
 }
 
