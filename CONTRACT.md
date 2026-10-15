@@ -134,6 +134,25 @@ RPC request written to worker stdin (A): `{"id":"<uuid>","method":"name","params
 - Exit guard (macOS): `macos_quit.rs` adds `applicationShouldTerminate:` to tao's NSApp delegate at runtime; Cmd+Q / Dock Quit / AppleScript `quit` / logout answer NSTerminateCancel while anything is active and emit `app://confirm-exit`. Tauri never sees those as `ExitRequested` (tao only implements `applicationWillTerminate`). `RunEvent::ExitRequested` with `code == None` (last window closed) is also prevented while anything is active and emits `app://confirm-exit`, same as window close. `confirm_quit` → `stop_all` → `app.exit(0)` passes (code is Some). `RunEvent::Exit` SIGKILLs any remaining groups as a last resort.
 - `tests/e2e/orphan.sh` plants a detached server + a running row before launch; the suite asserts it was reaped.
 
+## Dependencies and deletion (2026-10-15)
+- `supervisor/deps.rs` enforces `[app] env_manager`. `plan(root, manifest, argv0)` → install commands, argv wrap, bin dirs, env dir, input files:
+  `uv` + pyproject → `uv sync`, wrap `uv run` (unless argv0 is `uv` or inside `.venv/`); `uv` + requirements.txt → `uv venv --allow-existing .venv` + `uv pip install -r …`;
+  `pnpm` + package.json → `pnpm install` (or `npm install` when only npm exists); `byo` → existing `.venv/bin` / `node_modules/.bin` on PATH, never installs; `cargo`/`system` → nothing.
+- `ensure(state, run_id, app_id, root, m, &mut env, &mut argv)` runs from `spawner::launch_inner` before the snapshot/spawn: applies `shell_path` (bin dirs prepended, `VIRTUAL_ENV`),
+  installs when the env dir is missing or the sha256 stamp (`<home>/deps/<app_id>.stamp`, over manager + input file bytes) differs, streams installer output as
+  `run://stdout` lines prefixed `[homemade] deps:` (also seeded into `ActiveRun.log`), then records `deps` rows: kind `package` (`uv pip list` / pnpm-lock keys, source `homemade`,
+  replacing previous rows) and kind `env` (`.venv`/`node_modules`, bytes). A missing tool fails the run with an install hint. `pty_manager::spawn` uses `shell_path` too, so shells and agents run with the env active.
+- Shared-cache attribution: `cache_snapshot(home)` before spawn (`ActiveRun.cache_before`), `record_new_cache` in `finalize` → `deps` rows kind `model` (INSERT OR IGNORE; the first app keeps it).
+- Stop during install: `AppState.installing: DashMap<run_id, pid>`; `stop_run` removes the entry and SIGTERMs the installer's group (SIGKILL after 3 s); the installer's exit path sees the
+  entry gone and records the run `killed` (`launch` skips `fail_unspawned` when the DB status is already terminal).
+- DB table `deps (app_id, kind, key, bytes, source, first_seen, PK(app_id, kind, key))`; `queries::{upsert_dep, replace_deps, list_deps, package_names_used_by_others, delete_deps}`.
+  At registration of a *new* app an existing `.venv`/`node_modules` is recorded with source `preexisting`.
+- Two-level removal: `remove_app` = hide (unchanged). `delete_plan(app_id) -> DeletePlan {appId, name, rootDir, blocked?, items: PlanItem[], always}` with
+  `PlanItem {key, label, detail?, bytes (-1 unknown), checked, impliedBy?}`; keys `folder`, `env`, `scratch`, `sessions`, `packages`, `model:<key>`. `blocked` while the app has runs/PTYs.
+  `delete_app(app_id, keys) -> DeleteResult {freedBytes, prunedPackages, trashed}`: folder → Trash via the `trash` crate (never rm -rf; failure = Err), env/scratch/sessions removal,
+  `uv cache clean <name>` / `pnpm store prune` for exclusive packages, model entries removed only when canonical path stays under `store/shared_cache`, then app row + deps rows deleted.
+  Exposed on the control socket (`delete_plan`, `delete_app`; emits `app://removed`), CLI `homemade delete <id> [--plan] [--keep …] [--with …]`, and MCP tools of the same names.
+
 ## Local model (Phase 2, 2026-10-14) — Apple on-device Foundation Model
 
 Goal: ship the spec §12 `SemanticAssistor` for real, with **zero download and zero idle cost**: on macOS 26+ we use Apple's on-device

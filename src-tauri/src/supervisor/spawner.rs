@@ -3,7 +3,7 @@ use crate::db::queries;
 use crate::error::{err, Result};
 use crate::state::{ActiveRun, AppState, PendingJob};
 use crate::storage::{artifact_differ, env_router, secrets};
-use crate::supervisor::{reaper, scheduler, stdout_parser};
+use crate::supervisor::{deps, reaper, scheduler, stdout_parser};
 use crate::types::{now_ms, RunRecord};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -139,7 +139,9 @@ pub async fn launch(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     match launch_inner(state.clone(), job.clone()).await {
         Ok(()) => Ok(()),
         Err(e) => {
-            fail_unspawned(&state, &job.run_id, &format!("Failed to start: {e}"));
+            // A dependency install aborted by stop_run has already been recorded as killed.
+            let live = get_run_record(&state, &job.run_id).map(|r| matches!(r.status.as_str(), "running" | "queued_vram" | "stopping")).unwrap_or(true);
+            if live { fail_unspawned(&state, &job.run_id, &format!("Failed to start: {e}")); }
             notify_scheduler(state).await;
             Err(e)
         }
@@ -184,15 +186,19 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
     let cur_path = env.get("PATH").cloned().unwrap_or_default();
     for (k, v) in crate::control::child_env(&state.home, &cur_path) { env.insert(k, v); }
 
+    // ---- dependencies (env_manager): install when lockfiles changed, activate the env, wrap argv ----
+    let mut argv = job.argv.clone();
+    let dep_lines = deps::ensure(&state, &job.run_id, &job.app_id, &root, m, &mut env, &mut argv).await?;
+
     // ---- pre-run snapshot ----
-    let snap_root = root.clone();
-    let snapshot = tokio::task::spawn_blocking(move || artifact_differ::take(&snap_root))
+    let (snap_root, snap_home) = (root.clone(), state.home.clone());
+    let (snapshot, cache_before) = tokio::task::spawn_blocking(move || (artifact_differ::take(&snap_root), deps::cache_snapshot(&snap_home)))
         .await
         .map_err(|e| crate::error::Error::Msg(e.to_string()))?;
 
     // ---- spawn ----
-    let mut cmd = tokio::process::Command::new(&job.argv[0]);
-    cmd.args(&job.argv[1..])
+    let mut cmd = tokio::process::Command::new(&argv[0]);
+    cmd.args(&argv[1..])
         .current_dir(&cwd)
         .env_clear()
         .envs(&env)
@@ -217,7 +223,7 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
             Ok(())
         });
     }
-    let mut child = cmd.spawn().map_err(|e| crate::error::Error::Msg(format!("{}: {e}", job.argv[0])))?;
+    let mut child = cmd.spawn().map_err(|e| crate::error::Error::Msg(format!("{}: {e}", argv[0])))?;
     let pid = child.id().map(|p| p as i32).unwrap_or(0);
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -232,7 +238,7 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
         started_at: now_ms(),
         graceful_timeout_ms: m.resources.graceful_timeout_ms,
         kill_timeout_ms: m.resources.kill_timeout_ms,
-        log: std::sync::Mutex::new(VecDeque::new()),
+        log: std::sync::Mutex::new(VecDeque::from(dep_lines)),
         stdin: tokio::sync::Mutex::new(stdin),
         rpc_pending: Default::default(),
         worker_ready: AtomicBool::new(false),
@@ -245,6 +251,7 @@ async fn launch_inner(state: Arc<AppState>, job: PendingJob) -> Result<()> {
         mode: m.app.mode.as_str().to_string(),
         secrets: secret_vals,
         announced_artifacts: std::sync::Mutex::new(vec![]),
+        cache_before,
     });
     state.active_runs.insert(job.run_id.clone(), run.clone());
     {
@@ -317,6 +324,11 @@ async fn finalize(
     }
     for a in found { state.emit("run://artifact", a); }
 
+    // Attribute shared_cache entries that appeared during this run (models, browsers) to the app.
+    if !isolated_cache {
+        let (st, r) = (state.clone(), run.clone());
+        let _ = tokio::task::spawn_blocking(move || deps::record_new_cache(&st, &r.app_id, &r.cache_before)).await;
+    }
     // storage_refs: shared_cache entries touched during this run.
     if !isolated_cache {
         let (home, since) = (state.home.clone(), run.started_at);
@@ -423,6 +435,12 @@ async fn request_stop(state: &AppState, run: &Arc<ActiveRun>) {
 /// Stop: set stop_requested, DB status 'stopping' + emit run://status, then reaper::terminate_process_group.
 /// If the run is still queued (not in active_runs), remove it from vram_queue and finish as 'killed'.
 pub async fn stop_run(state: Arc<AppState>, run_id: &str) -> Result<()> {
+    // Still installing dependencies: kill the installer; its exit path records the run as killed.
+    if deps::stop_install(&state, run_id).await {
+        { let c = state.db.lock().unwrap(); let _ = queries::set_run_status(&c, run_id, "stopping"); }
+        emit_status(&state, run_id);
+        return Ok(());
+    }
     let active = state.active_runs.get(run_id).map(|r| r.value().clone());
     if let Some(run) = active {
         request_stop(&state, &run).await;

@@ -124,7 +124,7 @@ fn e(x: crate::error::Error) -> String { x.to_string() }
 /// Every method the socket understands. Names mirror the Tauri command surface (CONTRACT.md) plus `status`, `wait_run`,
 /// `open_app`, `close_window`, `show_view`.
 pub const METHODS: &[&str] = &[
-    "status", "list_apps", "get_app", "import_app", "create_project", "remove_app", "reload_manifest", "save_manifest", "draft_manifest", "apply_manifest",
+    "status", "list_apps", "get_app", "import_app", "create_project", "remove_app", "delete_plan", "delete_app", "reload_manifest", "save_manifest", "draft_manifest", "apply_manifest",
     "start_run", "stop_run", "force_run", "wait_run", "get_run", "list_runs", "list_active_runs", "get_run_log", "rpc_call", "build_cli_command",
     "list_artifacts", "list_presets", "save_preset", "delete_preset",
     "git_status", "git_init", "git_checkpoint", "git_revert_to",
@@ -166,6 +166,14 @@ pub async fn dispatch(st: &Arc<AppState>, method: &str, p: &Value) -> Result<Val
             crate::commands::apps::remove_app_inner(st, s(p, "app_id")?, b(p, "purge_scratch"), b(p, "delete_venv")).map_err(e)?;
             st.emit("app://removed", json!({ "appId": s(p, "app_id")? }));
             Ok(json!({ "ok": true }))
+        }
+        "delete_plan" => j(crate::commands::apps::delete_plan_inner(st, s(p, "app_id")?).map_err(e)?),
+        "delete_app" => {
+            let keys: Vec<String> = p.get("keys").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+            let res = crate::commands::apps::delete_app_inner(st, s(p, "app_id")?, &keys).await.map_err(e)?;
+            st.emit("app://removed", json!({ "appId": s(p, "app_id")? }));
+            j(res)
         }
         "reload_manifest" => {
             let rec = crate::commands::apps::reload_manifest_inner(st, &res, s(p, "app_id")?).map_err(e)?;

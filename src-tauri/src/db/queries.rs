@@ -165,3 +165,43 @@ pub fn list_agent_sessions(c: &Connection, app_id: &str) -> Result<Vec<AgentSess
     let mut st = c.prepare("SELECT * FROM agent_sessions WHERE app_id = ?1 ORDER BY updated_at DESC")?;
     Ok(st.query_map(params![app_id], row_session)?.collect::<rusqlite::Result<_>>()?)
 }
+
+// ---------- deps (dependency ownership per app) ----------
+#[derive(Debug, Clone)]
+pub struct DepRow { pub app_id: String, pub kind: String, pub key: String, pub bytes: i64, pub source: String, pub first_seen: i64 }
+fn row_dep(r: &Row) -> rusqlite::Result<DepRow> {
+    Ok(DepRow { app_id: r.get("app_id")?, kind: r.get("kind")?, key: r.get("key")?, bytes: r.get("bytes")?, source: r.get("source")?, first_seen: r.get("first_seen")? })
+}
+/// Insert or update one dependency row. `ignore_existing` keeps the first recorded attribution (INSERT OR IGNORE).
+pub fn upsert_dep(c: &Connection, app_id: &str, kind: &str, key: &str, bytes: i64, source: &str, ignore_existing: bool) -> Result<()> {
+    if ignore_existing {
+        c.execute("INSERT OR IGNORE INTO deps (app_id, kind, key, bytes, source, first_seen) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![app_id, kind, key, bytes, source, now_ms()])?;
+    } else {
+        c.execute("INSERT INTO deps (app_id, kind, key, bytes, source, first_seen) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                   ON CONFLICT(app_id, kind, key) DO UPDATE SET bytes = excluded.bytes, source = excluded.source",
+            params![app_id, kind, key, bytes, source, now_ms()])?;
+    }
+    Ok(())
+}
+/// Replace every row of `kind` for the app with `rows` (key, bytes).
+pub fn replace_deps(c: &Connection, app_id: &str, kind: &str, rows: &[(String, i64)], source: &str) -> Result<()> {
+    c.execute("DELETE FROM deps WHERE app_id = ?1 AND kind = ?2", params![app_id, kind])?;
+    let now = now_ms();
+    for (key, bytes) in rows {
+        c.execute("INSERT OR REPLACE INTO deps (app_id, kind, key, bytes, source, first_seen) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![app_id, kind, key, bytes, source, now])?;
+    }
+    Ok(())
+}
+pub fn list_deps(c: &Connection, app_id: &str) -> Result<Vec<DepRow>> {
+    let mut s = c.prepare("SELECT * FROM deps WHERE app_id = ?1 ORDER BY kind, key")?;
+    Ok(s.query_map(params![app_id], row_dep)?.collect::<rusqlite::Result<_>>()?)
+}
+/// Package names (key before '@') recorded for any *other* app.
+pub fn package_names_used_by_others(c: &Connection, app_id: &str) -> Result<std::collections::HashSet<String>> {
+    let mut s = c.prepare("SELECT key FROM deps WHERE kind = 'package' AND app_id != ?1")?;
+    let keys = s.query_map(params![app_id], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(keys.into_iter().map(|k| k.split('@').next().unwrap_or("").to_string()).collect())
+}
+pub fn delete_deps(c: &Connection, app_id: &str) -> Result<()> { c.execute("DELETE FROM deps WHERE app_id = ?1", params![app_id])?; Ok(()) }

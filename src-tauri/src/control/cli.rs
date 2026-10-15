@@ -12,6 +12,10 @@ homemade — drive the Homemade launcher from a shell or an agent
   homemade import <path>                  register a folder (or script); infers homemade.toml when absent
   homemade new <name> [--in DIR]          create an empty project (default location ~/homemade, or [projects] dir in config) and register it
   homemade remove <id> [--purge-scratch] [--delete-venv]
+                                          hide a program (unregister; source files stay)
+  homemade delete <id> [--plan] [--keep k1,k2] [--with m1,m2]
+                                          clean-delete: folder → Trash, env, scratch, transcripts, packages only it uses;
+                                          --plan lists the items ([x] = default), --keep/--with adjust the keys
   homemade draft <path>                   draft a homemade.toml + agent prompt (never writes)
   homemade apply <path> <toml-file|->     write homemade.toml and register the folder
   homemade run <id> [k=v | --k v]... [--wait] [--preset NAME]
@@ -101,6 +105,37 @@ fn go(cmd: &str, rest: &[String], json_out: bool) -> Result<i32, String> {
             Ok(0)
         }
         "remove" => { client::call("remove_app", &json!({ "app_id": arg(rest, 0, "app id")?, "purge_scratch": flag(rest, "--purge-scratch"), "delete_venv": flag(rest, "--delete-venv") }))?; println!("Removed."); Ok(0) }
+        "delete" => {
+            let app_id = arg(rest, 0, "app id")?;
+            let plan = client::call("delete_plan", &json!({ "app_id": app_id }))?;
+            if let Some(b) = plan["blocked"].as_str() { return Err(b.to_string()); }
+            let items = plan["items"].as_array().cloned().unwrap_or_default();
+            if flag(rest, "--plan") {
+                if json_out { print(&plan); return Ok(0); }
+                println!("{} ({})", plan["name"].as_str().unwrap_or(""), plan["rootDir"].as_str().unwrap_or(""));
+                for it in &items {
+                    let b = it["bytes"].as_i64().unwrap_or(-1);
+                    let size = if b < 0 { "?".to_string() } else { format!("{:.1} MB", b as f64 / 1048576.0) };
+                    println!("  [{}] {:<22} {:>10}  {}", if it["checked"].as_bool().unwrap_or(false) { "x" } else { " " },
+                        it["key"].as_str().unwrap_or(""), size, it["label"].as_str().unwrap_or(""));
+                }
+                let always: Vec<&str> = plan["always"].as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect()).unwrap_or_default();
+                println!("  always removed: {}", always.join(", "));
+                return Ok(0);
+            }
+            let split = |f: &str| -> Vec<String> { flag_val(rest, f).map(|v| v.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default() };
+            let (keep, with) = (split("--keep"), split("--with"));
+            let mut keys: Vec<String> = items.iter().filter(|i| i["checked"].as_bool().unwrap_or(false))
+                .filter_map(|i| i["key"].as_str().map(String::from)).filter(|k| !keep.contains(k)).collect();
+            for w in with { if !keys.contains(&w) { keys.push(w); } }
+            let v = client::call("delete_app", &json!({ "app_id": app_id, "keys": keys }))?;
+            if json_out { print(&v); } else {
+                println!("Deleted. Freed {:.1} MB{}{}", v["freedBytes"].as_i64().unwrap_or(0) as f64 / 1048576.0,
+                    if v["trashed"].as_bool().unwrap_or(false) { ", folder moved to Trash" } else { "" },
+                    match v["prunedPackages"].as_array().map(|a| a.len()).unwrap_or(0) { 0 => String::new(), n => format!(", pruned {n} packages") });
+            }
+            Ok(0)
+        }
         "draft" => {
             let v = client::call("draft_manifest", &json!({ "path": abs(&arg(rest, 0, "path")?) }))?;
             if json_out { print(&v); } else {

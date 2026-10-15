@@ -12,7 +12,10 @@ export const ipc = {
   importApp: (path: string) => invoke<T.AppRecord>("import_app", { path }),
   getApp: (appId: string) => invoke<T.AppRecord>("get_app", { appId }),
   reloadManifest: (appId: string) => invoke<T.AppRecord>("reload_manifest", { appId }),
-  removeApp: (appId: string, purgeScratch: boolean, deleteVenv: boolean) => invoke<void>("remove_app", { appId, purgeScratch, deleteVenv }),
+  /** Unregister only; folder, environment and outputs stay on disk. */
+  hideApp: (appId: string) => invoke<void>("remove_app", { appId, purgeScratch: false, deleteVenv: false }),
+  deletePlan: (appId: string) => invoke<T.DeletePlan>("delete_plan", { appId }),
+  deleteApp: (appId: string, keys: string[]) => invoke<T.DeleteResult>("delete_app", { appId, keys }),
   saveManifest: (appId: string, tomlText: string) => invoke<T.AppRecord>("save_manifest", { appId, tomlText }),
   // runs
   startRun: (appId: string, inputs: Record<string, unknown>) => invoke<T.RunRecord>("start_run", { appId, inputs }),

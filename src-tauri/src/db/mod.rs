@@ -72,6 +72,15 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
     git_commit_after TEXT,
     updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS deps (
+    app_id TEXT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    key TEXT NOT NULL,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL,
+    first_seen INTEGER NOT NULL,
+    PRIMARY KEY (app_id, kind, key)
+);
 CREATE INDEX IF NOT EXISTS idx_runs_app ON runs(app_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_artifacts_app ON artifacts(app_id, created_at DESC);
 "#;

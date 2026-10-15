@@ -51,6 +51,11 @@ export interface AppProcessInfo { runId: string; pid: number; pgid: number; port
 export interface DetectedAgent { agentType: AgentType; binaryPath: string; displayName: string }
 export interface PtyInfo { ptyId: string; appId: string; agentType: AgentType; sessionId: string | null }
 export interface StorageSummary { storeRoot: string; uvCacheBytes: number; pnpmStoreBytes: number; sharedCacheBytes: number; unmanagedVenvTotalBytes: number }
+// Delete program (`delete_plan` / `delete_app`). Keys: "folder", "env", "scratch", "sessions", "packages", "model:<path>".
+/** `bytes === -1` = unknown (shared store). `impliedBy: "folder"` = removed anyway when "folder" is ticked. */
+export interface PlanItem { key: string; label: string; detail: string | null; bytes: number; checked: boolean; impliedBy: string | null }
+export interface DeletePlan { appId: string; name: string; rootDir: string; blocked: string | null; always: string[]; items: PlanItem[] }
+export interface DeleteResult { freedBytes: number; prunedPackages: string[]; trashed: boolean }
 
 // Local model (Phase 2)
 export interface ModelStatus { provider: string; available: boolean; reason: string | null; helperPath: string | null }

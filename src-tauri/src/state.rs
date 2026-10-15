@@ -15,6 +15,8 @@ pub struct AppState {
     pub login_env: HashMap<String, String>,
     pub active_runs: DashMap<String, Arc<ActiveRun>>,
     pub active_ptys: DashMap<String, Arc<crate::supervisor::pty_manager::ActivePty>>,
+    /// Dependency installers in flight (run_id -> installer pid, a process-group leader), so `stop_run` can abort them.
+    pub installing: DashMap<String, i32>,
     pub vram_queue: Mutex<VecDeque<PendingJob>>,
     pub resources: std::sync::Mutex<crate::types::ResourceSnapshot>,
     /// Last ~5 min of snapshots (1/s) so CLI/MCP can report per-program usage over time.
@@ -62,6 +64,8 @@ pub struct ActiveRun {
     pub secrets: HashMap<String, String>,
     /// Paths already indexed via @homemade:artifact (post-run diff skips them).
     pub announced_artifacts: std::sync::Mutex<Vec<String>>,
+    /// shared_cache entries (relative paths) that existed before the run; new ones are attributed to this app on exit.
+    pub cache_before: Vec<String>,
 }
 
 /// A job waiting for admission (scheduler) or about to be spawned.

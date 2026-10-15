@@ -43,7 +43,14 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
     if !root.is_dir() {
         return err(format!("app root does not exist: {}", root.display()));
     }
-    let path_var = state.login_env.get("PATH").cloned().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
+    let login_path = state.login_env.get("PATH").cloned().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
+    let res_dir = crate::commands::resources_dir(&state.app_handle);
+    let manifest = crate::manifest::infer::load_or_infer(&root, &res_dir).ok().map(|(m, _, _)| m);
+    // The app's env (.venv/bin, node_modules/.bin) is active in every shell and agent opened on it.
+    let (path_var, virtual_env) = match &manifest {
+        Some(m) => crate::supervisor::deps::shell_path(&root, m, &login_path),
+        None => (login_path.clone(), None),
+    };
     let resolve = |bin: &str| -> Result<String> {
         agents::which(bin, &path_var)
             .map(|p| p.to_string_lossy().to_string())
@@ -98,8 +105,7 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
     // --- Auto-checkpoint (spec §10E) + provenance before spawn ---
     let is_agent = agent_type != "custom_shell";
     if is_agent {
-        let res = crate::commands::resources_dir(&state.app_handle);
-        if let Ok((m, _, _)) = crate::manifest::infer::load_or_infer(&root, &res) { crate::integrations::agent_docs::ensure(&root, app_id, &m, &state.home); }
+        if let Some(m) = &manifest { crate::integrations::agent_docs::ensure(&root, app_id, m, &state.home); }
     }
     let is_git = root.join(".git").exists();
     let auto_ckpt = is_agent && is_git && {
@@ -136,6 +142,7 @@ pub async fn spawn(state: Arc<AppState>, app_id: &str, agent_type: &str, session
     cmd.env_clear();
     for (k, v) in &state.login_env { cmd.env(k, v); }
     cmd.env("PATH", &path_var);
+    if let Some(v) = &virtual_env { cmd.env("VIRTUAL_ENV", v); }
     for (k, v) in crate::control::child_env(&state.home, &path_var) { cmd.env(k, v); }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");

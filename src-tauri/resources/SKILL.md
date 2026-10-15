@@ -27,7 +27,10 @@ name = "Frame Extractor"
 description = "Extract frames from a video"
 mode = "cli"                     # "cli" | "rpc_worker" | "webapp"
 exec = "uv run python main.py"   # inputs are appended as flags / positionals
-env_manager = "uv"               # "uv" | "pnpm" | "cargo" | "byo" | "system"
+env_manager = "uv"               # "uv" | "pnpm" | "cargo" | "byo" | "system" — enforced: before a run Homemade runs
+                                 # `uv sync` (pyproject) / `uv pip install -r requirements.txt` / `pnpm install` when the
+                                 # lockfiles change, wraps exec in `uv run` for uv projects, and puts .venv/bin or
+                                 # node_modules/.bin on PATH for runs, shells and agents. "system" = no install.
 
 [inputs.input_file]
 type = "file"

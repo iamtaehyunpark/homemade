@@ -3,10 +3,10 @@ import { workspaces } from "../lib/registry";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DockviewApi, DockviewPanelApi } from "dockview";
 import { ipc } from "../lib/ipc";
-import type { PresetRecord } from "../lib/types";
+import type { DeletePlan, PlanItem, PresetRecord } from "../lib/types";
 import { useStore, latestRun } from "../state/store";
 import { useLive } from "../state/live";
-import { errMsg, fmtMb, isActive } from "../lib/format";
+import { errMsg, fmtBytes, fmtMb, isActive } from "../lib/format";
 import { defaultValues, validate } from "../lib/form";
 import { Badge, Btn, Dropdown, MenuItem, Modal, PromptModal } from "./ui";
 import AutoForm from "./AutoForm";
@@ -111,7 +111,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
             {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={addShell}>New shell</MenuEntry>}
             <MenuEntry testid="reveal-app" close={close} onClick={() => ipc.revealInFinder(app.rootDir).catch((e) => notify(errMsg(e)))}>Reveal in Finder</MenuEntry>
             <div className="my-1 border-t border-line" />
-            <MenuEntry testid="remove-app" close={close} danger onClick={() => useStore.getState().setRemoveAppId(appId)} title="Remove app from Homemade">Remove…</MenuEntry>
+            <MenuEntry testid="remove-app" close={close} danger onClick={() => useStore.getState().setRemoveAppId(appId)} title="Hide from Homemade or delete the program">Remove…</MenuEntry>
           </>)}
         </MoreMenu>
       </header>}
@@ -165,28 +165,104 @@ function SoloStatus({ run }: { run?: ReturnType<typeof latestRun> }) {
     </div>);
 }
 
+/** Two levels: "Hide" unregisters and keeps everything on disk; "Delete program…" fetches a plan from the backend,
+ * lets the user tick what goes, then trashes the folder and frees what only this program uses. */
 export function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string; onClose: () => void }) {
-  const [purge, setPurge] = useState(false);
-  const [venv, setVenv] = useState(false);
+  const [step, setStep] = useState<"choose" | "delete">("choose");
   const [busy, setBusy] = useState(false);
+  const hide = async () => {
+    setBusy(true);
+    const st = useStore.getState();
+    try {
+      await ipc.hideApp(appId);
+      onClose();
+      st.removeApp(appId);
+      st.notify(`Hidden ${name}`);
+    } catch (e) { st.notify(`Hide failed: ${errMsg(e)}`); setBusy(false); }
+  };
+  if (step === "delete") return <DeletePlanModal appId={appId} name={name} onClose={onClose} onBack={() => setStep("choose")} />;
+  const card = "flex w-full flex-col items-start gap-0.5 rounded border border-line px-3 py-2 text-left hover:bg-panel-2 disabled:opacity-50";
+  return (
+    <Modal testid="remove-app-modal" title={`Remove ${name}`} onClose={onClose}>
+      <div className="flex flex-col gap-2">
+        <button data-testid="remove-app-confirm" className={card} disabled={busy} onClick={hide}>
+          <span className="font-medium text-fg">{busy ? "Hiding…" : "Hide from Homemade"}</span>
+          <span className="text-xs text-muted">Unregister it. The folder, environment and outputs stay on disk.</span>
+        </button>
+        <button data-testid="delete-app-open" className={card} disabled={busy} onClick={() => setStep("delete")}>
+          <span className="font-medium text-danger">Delete program…</span>
+          <span className="text-xs text-muted">Move the folder to the Trash and free what only this program uses. You choose what goes.</span>
+        </button>
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Btn onClick={onClose}>Cancel</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function DeletePlanModal({ appId, name, onClose, onBack }: { appId: string; name: string; onClose: () => void; onBack: () => void }) {
+  const [plan, setPlan] = useState<DeletePlan | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    ipc.deletePlan(appId)
+      .then((p) => { if (!live) return; setPlan(p); setChecked(Object.fromEntries(p.items.map((i) => [i.key, i.checked]))); })
+      .catch((e) => live && setLoadErr(errMsg(e)));
+    return () => { live = false; };
+  }, [appId]);
+  // An item whose `impliedBy` key is ticked goes anyway: shown checked+disabled and included in the request.
+  const effective = (i: PlanItem) => (i.impliedBy && checked[i.impliedBy]) ? true : !!checked[i.key];
+  const selected = plan ? plan.items.filter(effective).map((i) => i.key) : [];
   const go = async () => {
     setBusy(true);
     const st = useStore.getState();
     try {
-      await ipc.removeApp(appId, purge, venv);
+      const r = await ipc.deleteApp(appId, selected);
       onClose();
       st.removeApp(appId);
-      st.notify(`Removed ${name}`);
-    } catch (e) { st.notify(`Remove failed: ${errMsg(e)}`); setBusy(false); }
+      let msg = `Deleted ${name}`;
+      if (r.freedBytes > 0) msg += ` · ${fmtBytes(r.freedBytes)} freed`;
+      if (r.prunedPackages.length) msg += ` · pruned ${r.prunedPackages.length} package${r.prunedPackages.length === 1 ? "" : "s"}`;
+      st.notify(msg);
+    } catch (e) { st.notify(`Delete failed: ${errMsg(e)}`); setBusy(false); }
   };
+  const body = () => {
+    if (loadErr) return <p className="text-danger">{loadErr}</p>;
+    if (!plan) return <div className="flex items-center gap-2 text-muted"><span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />Working out what this program uses…</div>;
+    if (plan.blocked) return <p data-testid="delete-app-blocked" className="text-fg">{plan.blocked}</p>;
+    return (
+      <>
+        <p className="mb-2 text-xs text-muted">{plan.rootDir}</p>
+        <ul className="flex flex-col divide-y divide-line rounded border border-line">
+          {plan.items.map((i) => {
+            const implied = !!(i.impliedBy && checked[i.impliedBy]);
+            return (
+              <li key={i.key}>
+                <label className={`flex items-center gap-2 px-3 py-1.5 ${implied ? "opacity-60" : ""}`}>
+                  <input data-testid={`delete-item-${i.key}`} type="checkbox" checked={effective(i)} disabled={implied || busy}
+                    onChange={(e) => setChecked((c) => ({ ...c, [i.key]: e.target.checked }))} />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-fg">{i.label}</span>
+                    {i.detail && <span className="truncate text-xs text-muted" title={i.detail}>{i.detail}</span>}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted">{i.bytes === -1 ? "shared store" : fmtBytes(i.bytes)}</span>
+                </label>
+              </li>);
+          })}
+        </ul>
+        {plan.always.length > 0 && <p className="mt-2 text-xs text-muted">Also removed: {plan.always.join(", ")}</p>}
+      </>);
+  };
+  const canDelete = !!plan && !plan.blocked && !busy;
   return (
-    <Modal testid="remove-app-modal" title={`Remove ${name}?`} onClose={onClose}>
-      <p className="mb-3 text-fg">The app folder itself is never deleted. Its run history, presets and artifact records are removed from Homemade.</p>
-      <label className="mb-1 flex items-center gap-2"><input data-testid="remove-purge-scratch" type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} /> Also delete scratch files</label>
-      <label className="flex items-center gap-2"><input data-testid="remove-delete-venv" type="checkbox" checked={venv} onChange={(e) => setVenv(e.target.checked)} /> Also delete the app's virtualenv</label>
+    <Modal testid="delete-app-plan" title={`Delete ${name}`} onClose={onClose}>
+      {body()}
       <div className="mt-4 flex justify-end gap-2">
-        <Btn onClick={onClose}>Cancel</Btn>
-        <Btn data-testid="remove-app-confirm" variant="danger" disabled={busy} onClick={go}>{busy ? "Removing…" : "Remove"}</Btn>
+        <Btn onClick={onBack} disabled={busy}>Back</Btn>
+        {(!plan || !plan.blocked) && <Btn data-testid="delete-app-confirm" variant="danger" disabled={!canDelete} onClick={go}>{busy ? "Deleting…" : "Delete"}</Btn>}
       </div>
     </Modal>
   );

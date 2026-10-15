@@ -80,3 +80,10 @@ pub fn clean_scratch(root: &Path, cfg: &ArtifactConfig) -> u64 {
     }
     freed
 }
+
+/// Total size of files matching scratch_globs under root (what `clean_scratch` would free).
+pub fn scratch_bytes(root: &Path, cfg: &ArtifactConfig) -> u64 {
+    let pats = patterns(cfg);
+    if pats.is_empty() { return 0; }
+    walk(root).filter(|(p, _)| is_scratch(&pats, root, p)).map(|(_, m)| m.len()).sum()
+}
