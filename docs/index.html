@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homemade — GUI everything for your self-made software</title>
+<meta name="description" content="Homemade is a lightweight launcher and runtime workspace for the scripts and tools you build with coding agents. Every script gets an interface, a lifecycle, and an agent that can drive it.">
+<link rel="icon" href="logo.png">
+<meta property="og:title" content="Homemade">
+<meta property="og:description" content="GUI everything for your self-made software.">
+<meta property="og:image" content="logo.png">
+<style>
+  :root { --bg:#f6f7f9; --panel:#ffffff; --fg:#111418; --muted:#5b6470; --faint:#9aa3ad; --line:#e3e6ea; --accent:#2563eb; --accent-soft:#e8efff; --ok:#16a34a; --code:#0b0d10; --code-fg:#e6e6e6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --panel:#161920; --fg:#e8eaee; --muted:#9aa3ad; --faint:#5b6470; --line:#262a33; --accent:#60a5fa; --accent-soft:#1a2740; } }
+  * { box-sizing:border-box }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased }
+  a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
+  .wrap { max-width:980px; margin:0 auto; padding:0 20px }
+  header { padding:28px 0 }
+  nav { display:flex; align-items:center; gap:14px }
+  nav img { width:28px; height:28px; border-radius:7px }
+  nav b { font-size:15px; letter-spacing:-.01em } nav .sp { flex:1 }
+  nav a { color:var(--muted); font-size:13px; font-weight:500 } nav a:hover { color:var(--fg); text-decoration:none }
+  .hero { padding:56px 0 40px; display:grid; grid-template-columns:1.2fr .8fr; gap:40px; align-items:center }
+  .hero h1 { font-size:46px; line-height:1.08; letter-spacing:-.03em; margin:0 0 18px; font-weight:700 }
+  .hero p { font-size:18px; color:var(--muted); margin:0 0 26px; max-width:520px }
+  .cta { display:flex; gap:10px; flex-wrap:wrap }
+  .btn { display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border-radius:10px; font-weight:600; font-size:14px; border:1px solid var(--line); background:var(--panel); color:var(--fg) }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff } .btn:hover { text-decoration:none; filter:brightness(1.04) }
+  .hero-art { display:flex; justify-content:center } .hero-art img { width:220px; height:220px; border-radius:48px; box-shadow:0 20px 60px rgba(0,0,0,.18) }
+  .window { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.08); margin:10px 0 56px }
+  .window .bar { display:flex; gap:6px; padding:10px 12px; border-bottom:1px solid var(--line) } .window .bar i { width:11px; height:11px; border-radius:50%; background:var(--line); display:block }
+  .window .body { display:grid; grid-template-columns:170px 1fr 1fr; min-height:300px; font-size:12px }
+  .side { border-right:1px solid var(--line); padding:12px } .side div { padding:6px 8px; border-radius:6px; color:var(--muted) } .side .on { background:var(--accent-soft); color:var(--accent); font-weight:600 }
+  .panel { padding:14px; border-right:1px solid var(--line) } .panel h4 { margin:0 0 10px; font-size:13px } .panel .row { display:flex; gap:8px; margin-bottom:8px } .field { flex:1; border:1px solid var(--line); border-radius:6px; padding:6px 8px; color:var(--muted) }
+  .run { background:var(--accent); color:#fff; padding:6px 12px; border-radius:6px; font-weight:600 }
+  .tabs { display:flex; gap:12px; margin-top:28px; border-top:1px solid var(--line); padding-top:8px; color:var(--muted) } .tabs b { color:var(--fg); border-bottom:2px solid var(--accent) }
+  .log { font:11px/1.6 ui-monospace, Menlo, monospace; color:var(--muted); margin-top:8px }
+  .term { background:var(--code); color:var(--code-fg); padding:14px; font:11.5px/1.65 ui-monospace, Menlo, monospace; white-space:pre-wrap }
+  .term .d { color:#8d96a0 } .term .g { color:#5af78e } .term .y { color:#f3f99d }
+  h2 { font-size:28px; letter-spacing:-.02em; margin:0 0 8px } .lead { color:var(--muted); margin:0 0 28px; max-width:640px }
+  section { padding:28px 0 }
+  .grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px } .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px } .card h3 { margin:0 0 6px; font-size:15px } .card p { margin:0; color:var(--muted); font-size:13.5px }
+  .card .k { display:inline-block; font:11px ui-monospace, Menlo, monospace; background:var(--accent-soft); color:var(--accent); padding:1px 6px; border-radius:5px; margin-bottom:10px }
+  pre { background:var(--code); color:var(--code-fg); padding:16px 18px; border-radius:10px; overflow:auto; font:12.5px/1.6 ui-monospace, Menlo, monospace; margin:0 } code { font-family:ui-monospace, Menlo, monospace; font-size:.92em; background:var(--accent-soft); padding:1px 5px; border-radius:4px }
+  pre code { background:none; padding:0 }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start }
+  ol.steps { padding-left:20px; color:var(--muted) } ol.steps li { margin-bottom:8px } ol.steps b { color:var(--fg) }
+  footer { padding:40px 0 60px; color:var(--faint); font-size:13px; border-top:1px solid var(--line); margin-top:40px }
+  @media (max-width: 760px) { .hero { grid-template-columns:1fr } .hero h1 { font-size:36px } .hero-art { order:-1 } .hero-art img { width:140px; height:140px; border-radius:32px } .grid, .two { grid-template-columns:1fr } .window .body { grid-template-columns:1fr } .side, .panel { border-right:0; border-bottom:1px solid var(--line) } }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <nav>
+    <img src="logo.png" alt=""><b>Homemade</b>
+    <span class="sp"></span>
+    <a href="#how">How it works</a><a href="#agents">Agents</a><a href="#install">Install</a><a href="https://github.com/iamtaehyunpark/homemade">GitHub</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <h1>GUI everything for your self-made software.</h1>
+      <p>Coding agents make it five minutes to build a script. Six months later it is a forgotten folder with flags you no longer remember. Homemade is the launcher and runtime workspace where those programs live: an interface, a lifecycle, a window, and an agent that can run them for you.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install">Get Homemade</a>
+        <a class="btn" href="https://github.com/iamtaehyunpark/homemade">View source</a>
+      </div>
+    </div>
+    <div class="hero-art"><img src="logo.png" alt="Homemade logo"></div>
+  </div>
+
+  <div class="window" aria-hidden="true">
+    <div class="bar"><i></i><i></i><i></i></div>
+    <div class="body">
+      <div class="side"><div>＋ Add</div><div class="on">Apps</div><div>Launch</div><div>Monitor</div><div style="margin-top:14px;font-size:10px;letter-spacing:.08em">APPS</div><div>● KoGrammar</div><div>● Thumbnailer</div><div>● Scraper</div></div>
+      <div class="panel"><h4>Thumbnailer <span style="font-weight:400;color:var(--muted)">CLI · python</span></h4>
+        <div class="row"><div class="field">Source folder: ~/Pictures/raw</div></div>
+        <div class="row"><div class="field">Size: 512</div><div class="field">Grayscale: off</div></div>
+        <div class="row"><span class="run">▶ Run</span><span class="field" style="flex:0 0 auto">Presets ▾</span><span class="field" style="flex:0 0 auto">Edit with Agent</span></div>
+        <div class="tabs"><b>Logs</b><span>Outputs 12</span><span>Runs</span><span>Git</span><span>Manifest</span></div>
+        <div class="log">@homemade:progress 64% resizing IMG_0421.jpg<br>@homemade:artifact out/IMG_0419_512.jpg<br>@homemade:artifact out/IMG_0420_512.jpg</div>
+      </div>
+      <div class="term"><span class="d">Shell · Thumbnailer</span>
+<span class="g">$</span> homemade run thumbnailer size=512 --wait
+<span class="y">[homemade]</span> Run 3f2a91 STARTED (pid 48213)
+<span class="y">[homemade]</span> Run 3f2a91 SUCCEEDED in 4.2s; 12 outputs
+<span class="g">$</span> homemade activity thumbnailer
+state: idle · last: success · outputs: 12
+<span class="g">$</span> claude
+› [ui: Thumbnailer › Outputs › IMG_0419_512.jpg] make these sharper</div>
+    </div>
+  </div>
+
+  <section id="how">
+    <h2>Every script becomes an app</h2>
+    <p class="lead">Drop a folder or a single Python file on the sidebar. Homemade reads the entry point, infers the inputs, and writes a small <code>homemade.toml</code>. From then on the program has a form, a Run button, presets, live logs, an output shelf, and run history.</p>
+    <div class="grid">
+      <div class="card"><span class="k">interface</span><h3>Forms, presets, outputs</h3><p>Declared inputs become a form. Files the program writes show up in an output shelf. Progress lines render as a progress bar. Or ship your own HTML frontend through <code>window.homemade</code>.</p></div>
+      <div class="card"><span class="k">lifecycle</span><h3>Clean start, clean stop</h3><p>Programs run as native processes with full machine access. Stopping a run ends the whole process group. Closing Homemade warns about live jobs and reaps orphans next launch.</p></div>
+      <div class="card"><span class="k">windows</span><h3>Solo windows and Launch</h3><p>Open any program in its own window with nothing else around it, or pick it from the Launch grid. Close the window and the program exits cleanly.</p></div>
+      <div class="card"><span class="k">workspaces</span><h3>One workspace per program</h3><p>Each program has its own tab group: the program panel plus as many shells as you want (⌘T). Switch between programs from the sidebar; the others keep running.</p></div>
+      <div class="card"><span class="k">storage</span><h3>Shared environments</h3><p>Virtualenvs are deduplicated across projects, so PyTorch is on disk once instead of thirty times. Removing a program can take its scratch files and venv with it.</p></div>
+      <div class="card"><span class="k">resources</span><h3>GPU-aware queue</h3><p>Programs can declare VRAM needs. Homemade queues jobs that would not fit, and the Monitor page shows CPU, RAM, and GPU headroom over time.</p></div>
+    </div>
+  </section>
+
+  <section id="agents">
+    <h2>Built for coding agents</h2>
+    <p class="lead">The agent that wrote your program should be able to run it, read its logs, and fix it, without you clicking Run. Every shell and agent session Homemade opens has the launcher on PATH and the MCP server connected.</p>
+    <div class="two">
+      <div>
+        <pre><code># from any shell Homemade opened, or any agent
+homemade run thumbnailer size=512 --wait
+homemade log 3f2a91 --follow
+homemade activity thumbnailer
+homemade top thumbnailer      # resources of the live run
+homemade capture thumbnailer  # screenshot of its window
+homemade new my-tool          # blank project in ~/homemade
+
+# MCP: same operations as tools
+claude mcp add homemade -- \
+  /Applications/Homemade.app/Contents/MacOS/homemade --mcp</code></pre>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr">
+        <div class="card"><h3>Status, forwarded on your terms</h3><p>When a run starts, finishes, or gets a failure diagnosis, the agent's terminal shows a one-line notice with a Send button. Nothing is typed into the session unless you choose to.</p></div>
+        <div class="card"><h3>Point at anything in the program</h3><p>Select mode is a devtools-style cursor inside the program's own UI. Click an element and a reference with its selector, text, and React or Vue component lands in the agent session, ready for "make this blue".</p></div>
+        <div class="card"><h3>Managed CLAUDE.md and AGENTS.md</h3><p>Registered folders get a short managed block so an agent started by hand in that folder still knows the app id, manifest, CLI, and MCP server.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p class="lead">macOS on Apple Silicon today. Linux builds are untested. Homemade is a Tauri app: a Rust core with a React workbench.</p>
+    <div class="two">
+      <div>
+        <pre><code>git clone https://github.com/iamtaehyunpark/homemade
+cd homemade
+pnpm install
+pnpm tauri build
+open src-tauri/target/release/bundle/macos/Homemade.app</code></pre>
+      </div>
+      <ol class="steps">
+        <li><b>Add a program.</b> Drag a folder or a <code>.py</code> file onto the sidebar, or use Add → Auto-import folder to let the local model draft the manifest.</li>
+        <li><b>Run it.</b> Fill the form, press Run, watch logs and outputs. Save a preset for next time.</li>
+        <li><b>Hand it to an agent.</b> Edit with Agent opens a shell in the folder with <code>homemade</code> and the MCP server ready. Start <code>claude</code>, <code>codex</code>, or <code>agy</code> from there.</li>
+        <li><b>Make it feel like an app.</b> Put an <code>icon.png</code> in the folder, open it from Launch, or set <code>default_layout = "window"</code>.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  Homemade · <a href="https://github.com/iamtaehyunpark/homemade">github.com/iamtaehyunpark/homemade</a> · Built for programs that only you will ever run.
+</footer>
+</body>
+</html>
