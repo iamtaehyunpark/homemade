@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../state/store";
 import Icon from "./Icon";
-import { describe, mention } from "../lib/selectMode";
+import { broadcastSelect, describe, describeFrame, frameAppId, mention, type FramePick } from "../lib/selectMode";
 
 export default function SelectMode() {
   const on = useStore((s) => s.selectMode);
@@ -18,6 +18,23 @@ export default function SelectMode() {
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);
   }, [setOn]);
+
+  // Program frames run their own picker (src-tauri/src/picker.js): keep them in sync and take their picks.
+  useEffect(() => {
+    broadcastSelect(on);
+    const msg = (e: MessageEvent) => {
+      const d = e.data as { homemade?: string; on?: boolean; desc?: FramePick } | null;
+      if (!d || typeof d.homemade !== "string") return;
+      const live = useStore.getState().selectMode;
+      if (d.homemade === "picker-ready") { if (live) broadcastSelect(true, e.source as Window); return; }
+      if (!live) return;
+      if (d.homemade === "hover") setBox(null);
+      else if (d.homemade === "select-cancel") setOn(false);
+      else if (d.homemade === "pick" && d.desc) { setOn(false); void mention(describeFrame(d.desc, frameAppId(e.source))); }
+    };
+    window.addEventListener("message", msg);
+    return () => window.removeEventListener("message", msg);
+  }, [on, setOn]);
 
   useEffect(() => {
     if (!on) { setBox(null); return; }
@@ -55,8 +72,6 @@ export default function SelectMode() {
   if (!on) return null;
   return (
     <div data-select-overlay data-testid="select-overlay" className="pointer-events-none fixed inset-0 z-[100]">
-      {/* iframes swallow pointer events: a transparent shield keeps the picker working over web UIs */}
-      <div className="pointer-events-auto absolute inset-0" style={{ background: "transparent" }} />
       {box && (
         <>
           <div className="absolute rounded border-2 border-accent bg-accent/10 transition-all duration-75" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />
@@ -65,7 +80,7 @@ export default function SelectMode() {
         </>
       )}
       <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-fg px-3 py-1 text-[12px] text-bg shadow">
-        Select mode: click anything to mention it to the agent · Esc to cancel
+        Select mode: click any element of the program (or the launcher) to mention it to the agent · Esc to cancel
       </div>
     </div>
   );

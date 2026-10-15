@@ -65,6 +65,36 @@ export function describe(el: Element, clientX?: number, clientY?: number): Pick 
   return { mention, appId, selector, text, rect: { x: r.left, y: r.top, w: r.width, h: r.height } };
 }
 
+/** What the in-frame picker (src-tauri/src/picker.js) reports for an element of the program's own web UI. */
+export interface FramePick {
+  tag: string; attrs: string[]; text: string; path: string; component?: string; source?: string; page: string; title: string;
+  rect: { x: number; y: number; w: number; h: number };
+}
+
+/** Mention for an element inside a program's web UI: `[ui: App › page › button#save "Save" ‹Form› @ src/Form.tsx:12 — selector …]`. */
+export function describeFrame(d: FramePick, appId: string | null): Pick {
+  const app = appId ? useStore.getState().apps.find((a) => a.id === appId) : null;
+  const where = `${app ? app.name + " › " : ""}${d.page && d.page !== "/" ? d.page + " › " : ""}`;
+  const el = `${d.tag}${d.attrs.join("")}${d.text ? ` "${d.text}"` : ""}`;
+  const fw = d.component ? ` ‹${d.component}›${d.source ? ` @ ${d.source}` : ""}` : "";
+  const mention = `[ui: ${where}${el}${fw}${d.path ? ` — selector: ${d.path}` : ""}${appId ? ` (app ${appId})` : ""}]`;
+  return { mention, appId, selector: d.path, text: d.text, rect: d.rect };
+}
+
+/** Tell every embedded program frame whether select mode is on (the picker lives inside the frame). */
+export function broadcastSelect(on: boolean, only?: Window | null) {
+  for (const f of Array.from(document.querySelectorAll("iframe"))) {
+    const w = f.contentWindow;
+    if (w && (!only || w === only)) w.postMessage({ homemade: "select", on }, "*");
+  }
+}
+
+/** App that owns the frame a picker message came from. */
+export function frameAppId(source: MessageEventSource | null): string | null {
+  const f = Array.from(document.querySelectorAll("iframe")).find((i) => i.contentWindow === source);
+  return f?.closest<HTMLElement>("[data-app-panel]")?.dataset.appPanel ?? f?.closest<HTMLElement>("[data-app]")?.dataset.app ?? null;
+}
+
 /** Type the mention into the app's newest agent session (or the selected app's). Falls back to the clipboard. */
 export async function mention(pick: Pick): Promise<"typed" | "clipboard"> {
   const st = useStore.getState();

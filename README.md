@@ -39,7 +39,7 @@ Any app can run as if it were a program of its own: open it and press the **⧉ 
 
 ## Select mode: point at anything, tell the agent
 
-Press **Select element** (workspace toolbar, or ⌘⇧C), then click any element in the launcher: a run row, a log line, an output card, a form field, a tile, or a spot inside a program's web UI. Homemade types a reference like `[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback …" (app kogrammar)]` into the app's open agent session, without pressing Enter, so you can continue with what you want done about it. With no agent session open, the reference goes to the clipboard. Esc leaves select mode.
+Press **Select element** (workspace toolbar, or ⌘⇧C), then click any element in the launcher: a run row, a log line, an output card, a form field, a tile, or any element **inside the program's own web UI** (a picker is injected into every program frame, like a browser devtools cursor: it reports tag, id/classes/attributes, text, a CSS selector, and the React/Vue component and source file when the app runs in dev mode). Homemade types a reference like `[ui: KoGrammar › Underbar › Logs tab › log-line "Traceback …" (app kogrammar)]` (or `[ui: KoGrammar › /settings › button#save.btn "Save" ‹SettingsForm› @ src/Settings.tsx:41 — selector: form > button:nth-of-type(2) (app kogrammar)]`) into the app's open agent session, without pressing Enter, so you can continue with what you want done about it. With no agent session open, the reference goes to the clipboard. Esc leaves select mode.
 
 ## CLI and MCP: driving Homemade from a shell or an agent
 

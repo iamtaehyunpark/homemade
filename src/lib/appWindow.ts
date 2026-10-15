@@ -24,14 +24,12 @@ export async function openAppWindow(app: AppRecord): Promise<void> {
   try {
     const existing = await WebviewWindow.getByLabel(label);
     if (existing) { inWindow.add(app.id); await existing.setFocus(); return; }
-    const w = new WebviewWindow(label, {
-      url: `/?app=${encodeURIComponent(app.id)}&standalone=1`,
-      title: app.name, width: 960, height: 720,
-    });
+    // Built on the Rust side so the element picker is injected into the program's frames (see windows.rs).
+    await ipc.openAppWindow(label, `/?app=${encodeURIComponent(app.id)}&standalone=1`, app.name);
     inWindow.add(app.id);
     forceTab.delete(app.id);
-    w.once("tauri://error", (e) => { inWindow.delete(app.id); useStore.getState().notify(`Could not open window: ${errMsg(e.payload)}`); });
-    w.once("tauri://destroyed", () => inWindow.delete(app.id));
+    const w = await WebviewWindow.getByLabel(label);
+    w?.once("tauri://destroyed", () => inWindow.delete(app.id));
   } catch (e) {
     useStore.getState().notify(`Could not open window: ${errMsg(e)}`);
   }

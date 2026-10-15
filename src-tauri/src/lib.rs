@@ -1,4 +1,5 @@
 pub mod commands;
+mod windows;
 pub mod control;
 pub mod db;
 pub mod error;
@@ -24,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
         .setup(|app| {
+            windows::main_window(app.handle())?;
             let home = storage::config::homemade_home();
             storage::env_router::ensure_layout(&home)?;
             let conn = db::open(&home.join("state.db"))?;
@@ -158,7 +160,7 @@ pub fn run() {
             protocols::app_ui::handle(state, res_dir, req)
         })
         .invoke_handler(tauri::generate_handler![
-            commands::apps::list_apps, commands::apps::import_app, commands::apps::create_project, commands::apps::default_projects_dir, commands::apps::get_app, commands::apps::reload_manifest, commands::apps::remove_app, commands::apps::save_manifest,
+            commands::apps::list_apps, commands::apps::import_app, commands::apps::create_project, commands::apps::default_projects_dir, windows::open_app_window, commands::apps::get_app, commands::apps::reload_manifest, commands::apps::remove_app, commands::apps::save_manifest,
             commands::runs::start_run, commands::runs::stop_run, commands::runs::force_run, commands::runs::list_runs, commands::runs::get_run, commands::runs::get_run_log, commands::runs::rpc_call, commands::runs::build_cli_command, commands::runs::list_active_runs,
             commands::presets::list_presets, commands::presets::save_preset, commands::presets::delete_preset,
             commands::artifacts::list_artifacts, commands::artifacts::clean_scratch, commands::artifacts::delete_artifact,

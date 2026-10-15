@@ -8,6 +8,7 @@ export const ipc = {
   listApps: () => invoke<T.AppRecord[]>("list_apps"),
   createProject: (parentDir: string | null, name: string) => invoke<T.AppRecord>("create_project", { parentDir, name }),
   defaultProjectsDir: () => invoke<string>("default_projects_dir"),
+  openAppWindow: (label: string, url: string, title: string) => invoke<void>("open_app_window", { label, url, title }),
   importApp: (path: string) => invoke<T.AppRecord>("import_app", { path }),
   getApp: (appId: string) => invoke<T.AppRecord>("get_app", { appId }),
   reloadManifest: (appId: string) => invoke<T.AppRecord>("reload_manifest", { appId }),

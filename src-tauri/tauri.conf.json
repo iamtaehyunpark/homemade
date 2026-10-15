@@ -11,17 +11,6 @@
   },
   "app": {
     "macOSPrivateApi": true,
-    "windows": [
-      {
-        "label": "main",
-        "title": "Homemade",
-        "width": 1400,
-        "height": 900,
-        "minWidth": 900,
-        "minHeight": 600,
-        "backgroundColor": "#f6f7f9"
-      }
-    ],
     "security": {
       "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: blob: asset: http://asset.localhost homemade-asset: http://homemade-asset.localhost; media-src 'self' blob: homemade-asset: http://homemade-asset.localhost; frame-src 'self' homemade-app: http://homemade-app.localhost http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:",
       "assetProtocol": {
