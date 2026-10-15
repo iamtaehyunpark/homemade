@@ -67,7 +67,7 @@ export const useStore = create<HomemadeStore>((set) => ({
   resourceHistory: [],
   selectedAppId: null,
   openApps: [],
-  view: "workbench",
+  view: (() => { try { const v = localStorage.getItem("homemade.view"); return v === "launch" || v === "monitor" || v === "settings" ? v : "workbench"; } catch { return "workbench"; } })(),
   confirmExit: null,
   windowed: {},
   selectMode: false,
@@ -136,3 +136,6 @@ export function latestRun(runs: Record<string, RunRecord>, appId: string): RunRe
   for (const r of Object.values(runs)) if (r.appId === appId && (!best || r.startedAt > best.startedAt)) best = r;
   return best;
 }
+
+// Reopen where the user left off: the last page is restored on the next launch (sidebar collapse is kept by Sidebar itself).
+useStore.subscribe((s, prev) => { if (s.view !== prev.view) { try { localStorage.setItem("homemade.view", s.view); } catch { /* ignore */ } } });
