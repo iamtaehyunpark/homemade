@@ -137,4 +137,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--color-accent); 
 .launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 16px 18px; align-items: start; }
 .launcher-tile:hover { background: color-mix(in srgb, var(--color-fg) 5%, transparent); }
 .launcher-tile:active .launcher-icon { transform: scale(.96); }
+@keyframes tile-wiggle { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
+.launcher-tile-editing .launcher-icon { animation: tile-wiggle 260ms ease-in-out infinite; }
 .launcher-icon { width: 76px; height: 76px; border-radius: 19px; box-shadow: 0 2px 4px rgb(0 0 0 / 10%), inset 0 1px 0 rgb(255 255 255 / 20%); transition: transform 120ms ease; }

@@ -33,7 +33,6 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
   const [presets, setPresets] = useState<PresetRecord[]>([]);
   const [savingPreset, setSavingPreset] = useState(false);
   const [viewRunId, setViewRunId] = useState<string | null>(null);
-  const [removing, setRemoving] = useState(false);
   const [starting, setStarting] = useState(false);
 
   const manifest = app?.manifest;
@@ -112,7 +111,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
             {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={addShell}>New shell</MenuEntry>}
             <MenuEntry testid="reveal-app" close={close} onClick={() => ipc.revealInFinder(app.rootDir).catch((e) => notify(errMsg(e)))}>Reveal in Finder</MenuEntry>
             <div className="my-1 border-t border-line" />
-            <MenuEntry testid="remove-app" close={close} danger onClick={() => setRemoving(true)} title="Remove app from Homemade">Remove…</MenuEntry>
+            <MenuEntry testid="remove-app" close={close} danger onClick={() => useStore.getState().setRemoveAppId(appId)} title="Remove app from Homemade">Remove…</MenuEntry>
           </>)}
         </MoreMenu>
       </header>}
@@ -143,7 +142,6 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
         : <Underbar app={app} latest={run} viewRunId={viewRunId} onViewRun={setViewRunId} values={values} />}
       {savingPreset && <PromptModal title="Save preset" label="Preset name" onClose={() => setSavingPreset(false)}
         onOk={(n) => ipc.savePreset(appId, n, values).then(loadPresets).catch((e) => notify(errMsg(e)))} />}
-      {removing && <RemoveAppModal appId={appId} name={app.name} onClose={() => setRemoving(false)} />}
     </div>
   );
 }
@@ -167,7 +165,7 @@ function SoloStatus({ run }: { run?: ReturnType<typeof latestRun> }) {
     </div>);
 }
 
-function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string; onClose: () => void }) {
+export function RemoveAppModal({ appId, name, onClose }: { appId: string; name: string; onClose: () => void }) {
   const [purge, setPurge] = useState(false);
   const [venv, setVenv] = useState(false);
   const [busy, setBusy] = useState(false);

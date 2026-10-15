@@ -29,6 +29,12 @@ interface HomemadeStore {
   health: Record<string, HealthReport>; // by run id, from run://health or explain_run
   createProjectOpen: boolean;
   setCreateProjectOpen: (open: boolean) => void;
+  /** Apps fixed at the top of the sidebar (persisted per machine). */
+  pinned: string[];
+  togglePin: (appId: string) => void;
+  /** Non-null → the shared "Remove app?" dialog is open for this app (sidebar, Launch, header menu). */
+  removeAppId: string | null;
+  setRemoveAppId: (id: string | null) => void;
   pendingShellAppId: string | null;
   setPendingShellAppId: (id: string | null) => void;
   draftPath: string | null; // non-null → DraftManifestModal open for this folder
@@ -76,6 +82,14 @@ export const useStore = create<HomemadeStore>((set) => ({
   health: {},
   createProjectOpen: false,
   setCreateProjectOpen: (createProjectOpen) => set({ createProjectOpen }),
+  pinned: (() => { try { return JSON.parse(localStorage.getItem("homemade.pinned") ?? "[]") as string[]; } catch { return []; } })(),
+  togglePin: (id) => set((s) => {
+    const pinned = s.pinned.includes(id) ? s.pinned.filter((x) => x !== id) : [...s.pinned, id];
+    try { localStorage.setItem("homemade.pinned", JSON.stringify(pinned)); } catch { /* ignore */ }
+    return { pinned };
+  }),
+  removeAppId: null,
+  setRemoveAppId: (removeAppId) => set({ removeAppId }),
   pendingShellAppId: null,
   setPendingShellAppId: (pendingShellAppId) => set({ pendingShellAppId }),
   draftPath: null,

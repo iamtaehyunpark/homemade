@@ -1,5 +1,5 @@
 // App list, import (dialog + OS drop), settings entry.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon, { type IconName } from "./Icon";
 import { importPaths, pickApp } from "../lib/importApp";
 import type { AppRecord } from "../lib/types";
@@ -19,7 +19,9 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("homemade.sidebarCollapsed") === "true"; } catch { return false; } });
   const toggleSidebar = () => setCollapsed((value) => { try { localStorage.setItem("homemade.sidebarCollapsed", String(!value)); } catch { /* preference storage unavailable */ } return !value; });
   const createProject = useStore((s) => s.setCreateProjectOpen);
-  const filtered = apps.filter((a) => `${a.name} ${a.executionMode}`.toLowerCase().includes(filter.trim().toLowerCase()));
+  const pinned = useStore((s) => s.pinned);
+  const byPin = (a: AppRecord, b: AppRecord) => Number(pinned.includes(b.id)) - Number(pinned.includes(a.id));
+  const filtered = apps.filter((a) => `${a.name} ${a.executionMode}`.toLowerCase().includes(filter.trim().toLowerCase())).sort(byPin);
   const running = filtered.filter((a) => isActive(latestRun(runs, a.id)?.status));
   const idle = filtered.filter((a) => !running.includes(a));
   const view = useStore((s) => s.view);
@@ -42,7 +44,7 @@ export default function Sidebar() {
             <MenuItem onClick={() => { close(); void pickApp(); }}><Icon name="folder" size={15} />Add folder…</MenuItem>
             <MenuItem onClick={() => { close(); void pickApp(false); }}><Icon name="code" size={15} />Add script…</MenuItem>
             <div className="my-1 border-t border-line" />
-            <MenuItem testid="import-draft" onClick={() => { close(); void pickApp(true, true); }}>Add folder &amp; draft manifest…</MenuItem>
+            <MenuItem testid="import-draft" onClick={() => { close(); void pickApp(true, true); }}>Auto-import folder…</MenuItem>
           </>)}
         </Dropdown>
         <NavItem icon="code" label="Apps" collapsed={collapsed} active={view === "workbench"} onClick={() => setView("workbench")} />
@@ -74,7 +76,9 @@ function AppRow({ app }: { app: AppRecord }) {
   const selected = useStore((s) => s.selectedAppId === app.id && s.view === "workbench");
   const running = useStore((s) => isActive(latestRun(s.runs, app.id)?.status));
   const openApp = useStore((s) => s.openApp);
+  const pinned = useStore((s) => s.pinned.includes(app.id));
   const [migrating, setMigrating] = useState(false);
+  const [menu, setMenu] = useState(false);
 
   const dedupe = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -85,12 +89,18 @@ function AppRow({ app }: { app: AppRecord }) {
 
   return (
     // The row's testid wraps both the name button and the venv badge, so tests (and the picker) can scope to one app.
-    <div data-testid={`sidebar-app-${app.id}`} className={`app-row mb-0.5 rounded-md ${selected ? "bg-accent-soft" : "hover:bg-panel-2"}`}>
+    <div data-testid={`sidebar-app-${app.id}`} className={`app-row group relative mb-0.5 rounded-md ${selected ? "bg-accent-soft" : "hover:bg-panel-2"}`} onContextMenu={(e) => { e.preventDefault(); setMenu(true); }}>
       <button onClick={() => openApp(app.id)} title={app.rootDir} aria-current={selected ? "page" : undefined} className="flex w-full items-center gap-2 px-3 py-2 text-left">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? "bg-ok" : "bg-faint"}`} title={running ? "Running" : "Idle"} />
         <span className={`min-w-0 flex-1 truncate ${selected ? "text-accent" : ""}`}>{app.name}</span>
-        <Badge>{modeLabel[app.executionMode] ?? app.executionMode}</Badge>
+        {pinned && <Icon name="pin" size={12} className="text-faint" />}
+        <span className="group-hover:hidden"><Badge>{modeLabel[app.executionMode] ?? app.executionMode}</Badge></span>
       </button>
+      <button data-testid="sidebar-app-menu" aria-label="App menu" onClick={(e) => { e.stopPropagation(); setMenu(true); }} className="absolute right-2 top-1.5 hidden rounded p-1 text-muted hover:bg-panel hover:text-fg group-hover:block"><Icon name="more" size={14} /></button>
+      {menu && <RowMenu onClose={() => setMenu(false)}>
+        <MenuItem testid="sidebar-pin" onClick={() => { setMenu(false); useStore.getState().togglePin(app.id); }}><Icon name="pin" size={14} />{pinned ? "Unpin" : "Pin to top"}</MenuItem>
+        <MenuItem testid="sidebar-remove" onClick={() => { setMenu(false); useStore.getState().setRemoveAppId(app.id); }}><Icon name="trash" size={14} />Remove…</MenuItem>
+      </RowMenu>}
       {app.unmanagedVenvBytes > VENV_BADGE_MIN_BYTES && (
         <div className="ml-3.5 mt-1">
           <Btn data-testid="venv-dedupe" className="!px-1.5 !py-0 !text-[10px] text-warn" disabled={migrating} onClick={dedupe} title="Move this app's venv into the shared store">
@@ -113,4 +123,16 @@ function AppShortcut({ app }: { app: AppRecord }) {
     {app.name.split(/[\s_-]+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase()}
     {running && <span className="absolute right-1.5 top-1.5 h-1 w-1 rounded-full bg-ok" />}
   </button>;
+}
+
+/** Small popup under a row; closes on outside click or Esc. */
+function RowMenu({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("mousedown", down); document.addEventListener("keydown", key, true);
+    return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key, true); };
+  }, [onClose]);
+  return <div ref={ref} role="menu" className="absolute right-2 top-8 z-30 min-w-40 rounded-md border border-line bg-panel py-1 shadow-lg">{children}</div>;
 }

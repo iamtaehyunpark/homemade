@@ -15,6 +15,7 @@ import { useStore } from "./state/store";
 import AppPanel from "./components/AppPanel";
 import DraftManifestModal from "./components/DraftManifestModal";
 import SelectMode from "./components/SelectMode";
+import { RemoveAppModal } from "./components/AppPanel";
 import CreateProjectModal from "./components/CreateProjectModal";
 import { installSoloCloseGuard } from "./lib/appWindow";
 
@@ -77,6 +78,7 @@ function MainApp() {
       </div>
       {view !== "launch" && <ResourceBar />}
       {createProjectOpen && <CreateProjectModal />}
+      <RemoveAppHost />
       <DraftManifestModal />
       <SelectMode />
       {toast && (
@@ -97,4 +99,12 @@ function MainApp() {
 
 function Toast({ message, onDismiss, solo }: { message: string; onDismiss: () => void; solo?: boolean }) {
   return <div className={`app-toast fixed right-4 z-50 max-w-sm ${solo ? "bottom-4" : "bottom-12"}`}><span role="status" className="min-w-0 break-words">{message}</span><button onClick={onDismiss} aria-label="Dismiss notification" className="rounded p-1 text-muted hover:bg-panel-2"><Icon name="close" size={14} /></button></div>;
+}
+
+function RemoveAppHost() {
+  const id = useStore((s) => s.removeAppId);
+  const app = useStore((s) => s.apps.find((a) => a.id === id));
+  const close = useStore((s) => s.setRemoveAppId);
+  if (!id || !app) return null;
+  return <RemoveAppModal appId={id} name={app.name} onClose={() => close(null)} />;
 }

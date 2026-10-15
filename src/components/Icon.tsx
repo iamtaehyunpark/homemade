@@ -15,6 +15,9 @@ const paths = {
   cursor: "m4 3 6 18 3-7 7-3Z M13 14l6 6",
   terminal: "m5 6 5 6-5 6m8 0h6",
   close: "m6 6 12 12M6 18 18 6",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
+  pin: "M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
 } as const;
 export type IconName = keyof typeof paths;
 export default function Icon({ name, size = 18, className = "", style }: { name: IconName; size?: number; className?: string; style?: CSSProperties }) {

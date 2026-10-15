@@ -66,7 +66,7 @@ Registering a folder also writes a managed block (between `<!-- homemade:start -
 
 Homemade uses Apple's on-device Foundation Model (the one behind Apple Intelligence) through a 60 KB helper. Nothing is downloaded and nothing runs while idle. It powers:
 
-- **Draft manifest** (`✨ Draft manifest` in an app header, or *Import folder & draft manifest…*): reads the README, docs, `pyproject.toml` / `package.json`, and the entry scripts' CLI definitions, and proposes a `homemade.toml` plus a self-contained *agent prompt* you can paste into Claude Code, Codex or `agy` to finish the adaptation. How the program runs (exec, mode, env manager) is decided deterministically from the repo; the model fills in names, descriptions, labels and input types the README documents. Also available to agents as the MCP tool `draft_manifest`.
+- **Draft manifest** (`✨ Draft manifest` in an app header, or *Auto-import folder…*): reads the README, docs, `pyproject.toml` / `package.json`, and the entry scripts' CLI definitions, and proposes a `homemade.toml` plus a self-contained *agent prompt* you can paste into Claude Code, Codex or `agy` to finish the adaptation. How the program runs (exec, mode, env manager) is decided deterministically from the repo; the model fills in names, descriptions, labels and input types the README documents. Also available to agents as the MCP tool `draft_manifest`.
 - **Explain a failed run**: a one-line diagnosis above the log, automatically after a failure or via *Explain*.
 - **Input inference for scripts without argparse** at import time, and **one-line titles for agent sessions** after a PTY session exits.
 
