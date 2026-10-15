@@ -106,7 +106,10 @@ export const useStore = create<HomemadeStore>((set) => ({
   }),
   select: (selectedAppId) => set({ selectedAppId }),
   openApp: (id) => set((s) => ({ openApps: s.openApps.includes(id) ? s.openApps : [...s.openApps, id], selectedAppId: id, view: "workbench" })),
-  closeApp: (id) => set((s) => ({ openApps: s.openApps.filter((x) => x !== id) })),
+  closeApp: (id) => set((s) => {
+    const openApps = s.openApps.filter((x) => x !== id);
+    return { openApps, selectedAppId: s.selectedAppId === id ? (openApps[openApps.length - 1] ?? null) : s.selectedAppId };
+  }),
   setView: (view) => set({ view }),
   setConfirmExit: (confirmExit) => set({ confirmExit }),
   bumpArtifacts: (appId) => set((s) => ({ artifactTick: { ...s.artifactTick, [appId]: (s.artifactTick[appId] ?? 0) + 1 } })),

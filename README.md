@@ -27,7 +27,7 @@ Runs one registered app end to end and prints the status, log tail and artifacts
 ## Layout
 
 - `src-tauri/` Rust supervisor: process groups + 3-stage reaper, `@homemade:` directive parser, VRAM/unified-memory admission queue, shared `uv`/HF/Torch store, keychain secrets, agent-session discovery (Claude Code, Codex, Antigravity), git checkpoints, `homemade-asset://` and `homemade-app://` protocols.
-- `src/` React workbench: dockview tabs, AutoForm, sandboxed custom UI iframe with `window.homemade`, xterm agent terminal, output shelf, resource bar.
+- `src/` React workbench: one dockview workspace per opened program (program panel plus any number of shells; the sidebar switches workspaces, **⌘T** or the **+** in a tab bar adds a shell), AutoForm, sandboxed custom UI iframe with `window.homemade`, xterm agent terminal, output shelf, resource bar.
 - `src-tauri/resources/` files shipped with the app: `ast_inspector.py`, `homemade_worker.py`, `homemade-bridge.js`, `SKILL.md` (auto-installed to `~/.claude/skills/homemade`).
 - State lives in `~/.homemade/`.
 

@@ -38,7 +38,8 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
   const [exited, setExited] = useState(false);
   const [curPty, setCurPty] = useState<string | null>(null);
   // `[homemade]` status lines are never typed by themselves: they wait here until the user presses Send.
-  const [notices, setNotices] = useState<string[]>([]);
+  const [notices, setNotices] = useState<{ id: number; text: string }[]>([]);
+  const dismiss = (id: number) => setNotices((n) => n.filter((x) => x.id !== id));
   const bindPty = (id: string | null) => {
     if (ptyId.current) terminals.delete(ptyId.current);
     ptyId.current = id;
@@ -98,7 +99,10 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
       else if (!ptyId.current) { const m = pendingData.current; m.set(p.ptyId, [...(m.get(p.ptyId) ?? []), p.data]); }
     }).then((u) => (disposed ? u() : un.push(u)));
     on<PtyNoticeEvent>(events.ptyNotice, (p) => {
-      if (p.ptyId === ptyId.current) setNotices((n) => [...n.slice(-4), p.text]);
+      if (p.ptyId !== ptyId.current) return;
+      const id = Date.now() + Math.random();
+      setNotices((n) => [...n.slice(-2), { id, text: p.text }]);
+      window.setTimeout(() => setNotices((n) => n.filter((x) => x.id !== id)), 15000); // toast: gone after 15 s unless sent
     }).then((u) => (disposed ? u() : un.push(u)));
     on<PtyExitEvent>(events.ptyExit, (p) => {
       if (p.ptyId !== ptyId.current) return;
@@ -168,19 +172,21 @@ export default function AgentTerminal({ appId, initialAgentType }: { appId: stri
         {!isShell && <Btn disabled={!sessionId} onClick={() => start(true)}>Resume</Btn>}
         {exited && <Btn variant="primary" onClick={() => start(!!sessionId)}>Restart</Btn>}
       </div>
-      {notices.length > 0 && (
-        <div data-testid="terminal-notices" className="flex flex-col gap-1 border-b border-line bg-panel-2 px-2 py-1.5">
-          {notices.map((text, i) => (
-            <div key={i} className="flex items-center gap-2 text-[11px]">
-              <span className="min-w-0 flex-1 truncate font-mono text-muted" title={text}>{text}</span>
-              <Btn data-testid="notice-send" variant="primary" className="!px-2 !py-0.5 !text-[11px]" disabled={!curPty}
-                onClick={() => { if (curPty) ipc.ptyWrite(curPty, text + "\r").catch(() => {}); setNotices((n) => n.filter((_, j) => j !== i)); }}>Send to agent</Btn>
-              <button aria-label="Dismiss" className="text-muted hover:text-fg" onClick={() => setNotices((n) => n.filter((_, j) => j !== i))}>×</button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="min-h-0 flex-1 p-1.5" style={{ background: "#0b0d10" }}><div ref={host} className="h-full w-full" /></div>
+      <div className="relative min-h-0 flex-1 p-1.5" style={{ background: "#0b0d10" }}>
+        <div ref={host} className="h-full w-full" />
+        {notices.length > 0 && (
+          <div data-testid="terminal-notices" className="pointer-events-none absolute inset-x-2 bottom-2 flex flex-col gap-1">
+            {notices.map((n) => (
+              <div key={n.id} className="pointer-events-auto flex items-center gap-2 rounded-md border border-line bg-panel/95 px-2 py-1.5 text-[11px] shadow-lg backdrop-blur">
+                <span className="min-w-0 flex-1 truncate font-mono text-muted" title={n.text}>{n.text}</span>
+                <Btn data-testid="notice-send" variant="primary" className="!px-2 !py-0.5 !text-[11px]" disabled={!curPty}
+                  onClick={() => { if (curPty) ipc.ptyWrite(curPty, n.text + "\r").catch(() => {}); dismiss(n.id); }}>Send to agent</Btn>
+                <button aria-label="Dismiss" className="text-muted hover:text-fg" onClick={() => dismiss(n.id)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

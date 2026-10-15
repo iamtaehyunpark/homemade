@@ -1,8 +1,10 @@
-// OWNER: agent F. Dockview workbench: one panel per opened app, plus agent terminal panels.
+// OWNER: agent F. One workspace (its own dockview tab group) per opened program: the program panel plus any number of
+// shell panels. The sidebar switches which workspace is visible; the others stay mounted so their terminals keep running.
 import { useEffect, useRef, useState } from "react";
-import { DockviewReact, themeDark, themeLight, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview";
+import { DockviewReact, themeDark, themeLight, type DockviewApi, type DockviewReadyEvent, type IDockviewHeaderActionsProps, type IDockviewPanelProps } from "dockview";
 import { useStore, latestRun } from "../state/store";
 import { openAppWindow, forceTab, inWindow } from "../lib/appWindow";
+import { workspaces } from "../lib/registry";
 import AppPanel from "./AppPanel";
 import Icon from "./Icon";
 import { Btn } from "./ui";
@@ -13,7 +15,6 @@ import type { AgentType } from "../lib/types";
 import { useTheme } from "../lib/theme";
 
 export const appPanelId = (appId: string) => `app:${appId}`;
-export const agentPanelId = (appId: string) => `agent:${appId}`;
 
 function AppPanelHost(props: IDockviewPanelProps<{ appId: string }>) {
   return <AppPanel appId={props.params.appId} api={props.api} containerApi={props.containerApi} />;
@@ -22,6 +23,15 @@ function AgentPanelHost(props: IDockviewPanelProps<{ appId: string; initialAgent
   return <AgentTerminal appId={props.params.appId} initialAgentType={props.params.initialAgentType} />;
 }
 const components = { app: AppPanelHost, agent: AgentPanelHost };
+
+/** "+" at the right of every tab bar: another shell for this program (⌘T). */
+function AddShell(props: IDockviewHeaderActionsProps) {
+  const appId = (props.containerApi.panels[0]?.params as { appId?: string } | undefined)?.appId;
+  return (
+    <button data-testid="add-shell" aria-label="New shell" title="New shell (⌘T)" onClick={() => appId && workspaces.get(appId)?.addShell()}
+      className="mx-1 flex h-full items-center px-1.5 text-muted hover:text-fg"><Icon name="plus" size={14} /></button>
+  );
+}
 
 function Watermark() {
   const apps = useStore((s) => s.apps);
@@ -66,93 +76,79 @@ function Watermark() {
   );
 }
 
-export default function Workbench() {
+/** One program's workspace: its dockview with the program panel and shells. */
+function AppWorkspace({ appId, visible }: { appId: string; visible: boolean }) {
+  const app = useStore((s) => s.apps.find((a) => a.id === appId));
+  const pendingShell = useStore((s) => s.pendingShellAppId === appId);
+  const theme = useTheme();
+  const rootRef = useRef<HTMLDivElement>(null);
   const [api, setApi] = useState<DockviewApi | null>(null);
+  const shells = useRef(0);
+
+  const onReady = (e: DockviewReadyEvent) => {
+    setApi(e.api);
+    e.api.addPanel({ id: appPanelId(appId), component: "app", title: app?.name ?? appId, params: { appId } });
+    const addShell = () => {
+      const last = [...e.api.panels].reverse().find((p) => p.id.startsWith("shell:"));
+      const n = ++shells.current;
+      e.api.addPanel({
+        id: `shell:${appId}:${n}`, component: "agent", title: n === 1 ? "Shell" : `Shell ${n}`, params: { appId, initialAgentType: "custom_shell" },
+        position: last ? { direction: "within", referencePanel: last.id } : { direction: "right", referencePanel: appPanelId(appId) },
+      });
+    };
+    workspaces.set(appId, { addShell });
+    // Drag the program tab out of the dock ("to nowhere") → it opens in its own window.
+    let dragging = false;
+    e.api.onWillDragPanel((ev) => { dragging = ev.panel.id === appPanelId(appId); });
+    e.api.onDidDrop(() => { dragging = false; });
+    const onDragEnd = (ne: DragEvent) => {
+      if (!dragging || !rootRef.current) return;
+      dragging = false;
+      const r = rootRef.current.getBoundingClientRect();
+      const inside = ne.clientX >= r.left && ne.clientX <= r.right && ne.clientY >= r.top && ne.clientY <= r.bottom;
+      if (inside) return; // dockview handled it, or cancelled (Esc)
+      const a = useStore.getState().apps.find((x) => x.id === appId);
+      if (a) { openAppWindow(a); useStore.getState().closeApp(appId); }
+    };
+    document.addEventListener("dragend", onDragEnd, true);
+    e.api.onDidRemovePanel((p) => { if (p.id === appPanelId(appId)) { document.removeEventListener("dragend", onDragEnd, true); useStore.getState().closeApp(appId); } });
+  };
+  useEffect(() => () => { workspaces.delete(appId); }, [appId]);
+  useEffect(() => { if (api && app) api.getPanel(appPanelId(appId))?.setTitle(app.name); }, [api, app?.name]);
+  useEffect(() => {
+    if (!api || !pendingShell) return;
+    workspaces.get(appId)?.addShell();
+    useStore.getState().setPendingShellAppId(null);
+  }, [api, pendingShell]);
+  useEffect(() => { if (visible && api) api.layout(rootRef.current?.clientWidth ?? 0, rootRef.current?.clientHeight ?? 0); }, [visible, api]);
+
+  return (
+    <div ref={rootRef} data-testid="dock-root" data-workspace={appId} hidden={!visible}
+      className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}
+      onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "t") { e.preventDefault(); workspaces.get(appId)?.addShell(); } }}>
+      <DockviewReact components={components} onReady={onReady} rightHeaderActionsComponent={AddShell} theme={theme === "dark" ? themeDark : themeLight} />
+    </div>
+  );
+}
+
+export default function Workbench() {
   const openApps = useStore((s) => s.openApps);
   const selected = useStore((s) => s.selectedAppId);
   const apps = useStore((s) => s.apps);
-  const pendingShellAppId = useStore((s) => s.pendingShellAppId);
-  const syncing = useRef(false);
-  const theme = useTheme();
 
-  const rootRef = useRef<HTMLDivElement>(null);
-  const onReady = (e: DockviewReadyEvent) => {
-    setApi(e.api);
-    // Drag a tab out of the dock ("to nowhere": the sidebar, outside the window, …) → that program opens in its own window.
-    let dragging: string | null = null;
-    e.api.onWillDragPanel((ev) => { dragging = ev.panel.id.startsWith("app:") ? ev.panel.id.slice(4) : null; });
-    e.api.onDidDrop(() => { dragging = null; });
-    const onDragEnd = (ne: DragEvent) => {
-      const id = dragging; dragging = null;
-      if (!id || !rootRef.current) return;
-      const r = rootRef.current.getBoundingClientRect();
-      const inside = ne.clientX >= r.left && ne.clientX <= r.right && ne.clientY >= r.top && ne.clientY <= r.bottom;
-      if (inside && ne.dataTransfer?.dropEffect !== "none") return; // dockview handled it
-      if (inside) return; // cancelled inside the dock (Esc) — leave the tab alone
-      const app = useStore.getState().apps.find((a) => a.id === id);
-      if (app) { openAppWindow(app); useStore.getState().closeApp(id); }
-    };
-    document.addEventListener("dragend", onDragEnd, true); // Workbench lives for the whole session; no teardown needed
-    e.api.onDidRemovePanel((p) => {
-      if (syncing.current) return;
-      const id = p.id;
-      if (id.startsWith("app:")) {
-        const appId = id.slice(4);
-        useStore.getState().closeApp(appId);
-        e.api.getPanel(agentPanelId(appId))?.api.close();
-      }
-    });
-    e.api.onDidActivePanelChange((p) => {
-      if (!p) return;
-      const appId = p.id.replace(/^(app|agent):/, "");
-      if (useStore.getState().selectedAppId !== appId) useStore.getState().select(appId);
-    });
-  };
-
+  // Window-layout apps live in their own webview window; keep them out of the workspaces.
   useEffect(() => {
-    if (!api) return;
-    syncing.current = true;
-    const toWindow: string[] = [];
     for (const id of openApps) {
-      if (api.getPanel(appPanelId(id))) continue;
       const app = apps.find((a) => a.id === id);
-      const layout = app?.manifest.ui.default_layout ?? "tab";
-      if (app && (inWindow.has(id) || (layout === "window" && !forceTab.has(id)))) { toWindow.push(id); openAppWindow(app); continue; }
-      const ref = api.activePanel;
-      api.addPanel({
-        id: appPanelId(id), component: "app", title: app?.name ?? id, params: { appId: id },
-        ...(layout === "split_right" && ref ? { position: { direction: "right" as const, referencePanel: ref.id } } : {}),
-      });
+      if (app && (inWindow.has(id) || (app.manifest.ui.default_layout === "window" && !forceTab.has(id)))) { openAppWindow(app); useStore.getState().closeApp(id); }
     }
-    for (const p of [...api.panels]) {
-      const appId = p.id.replace(/^(app|agent):/, "");
-      if (!openApps.includes(appId)) p.api.close();
-    }
-    syncing.current = false;
-    // Window-layout apps live in their own webview window; keep them out of the dock's open list.
-    if (toWindow.length) for (const id of toWindow) useStore.getState().closeApp(id);
-  }, [api, openApps, apps]);
+  }, [openApps, apps]);
 
-  useEffect(() => {
-    if (!api || !selected) return;
-    const p = api.getPanel(appPanelId(selected));
-    if (p && !p.api.isActive) p.api.setActive();
-  }, [api, selected]);
-
-  useEffect(() => {
-    if (!api || !pendingShellAppId) return;
-    const appPanel = api.getPanel(appPanelId(pendingShellAppId));
-    if (!appPanel) return;
-    const id = agentPanelId(pendingShellAppId);
-    if (!api.getPanel(id)) {
-      api.addPanel({ id, component: "agent", title: "Shell", params: { appId: pendingShellAppId, initialAgentType: "custom_shell" }, position: { direction: "right", referencePanel: appPanel.id } });
-    }
-    useStore.getState().setPendingShellAppId(null);
-  }, [api, pendingShellAppId, openApps]);
-
+  const current = selected && openApps.includes(selected) ? selected : null;
   return (
-    <div ref={rootRef} data-testid="dock-root" className={`${theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"} h-full w-full`}>
-      <DockviewReact components={components} onReady={onReady} watermarkComponent={Watermark} theme={theme === "dark" ? themeDark : themeLight} />
+    <div className="h-full w-full">
+      {!current && <Watermark />}
+      {openApps.map((id) => <AppWorkspace key={id} appId={id} visible={id === current} />)}
     </div>
   );
 }

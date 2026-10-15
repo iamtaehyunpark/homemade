@@ -1,4 +1,5 @@
 // One app's workspace: header (run/stop, presets, Edit with Agent, ⋯ menu), queue banner, form / custom UI / webapp, Underbar.
+import { workspaces } from "../lib/registry";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DockviewApi, DockviewPanelApi } from "dockview";
 import { ipc } from "../lib/ipc";
@@ -15,7 +16,6 @@ import Underbar from "./Underbar";
 import { openAppWindow, dockAppWindow } from "../lib/appWindow";
 
 const isMac = navigator.platform.toLowerCase().includes("mac");
-const agentId = (appId: string) => `agent:${appId}`;
 
 /** `api`/`containerApi` are absent when rendered standalone in its own window. `solo` = dedicated window: just the program
  * (web UI, custom UI or form), no header, tabs or Underbar — it should feel like one program running on its own. */
@@ -32,7 +32,6 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
   const [touched, setTouched] = useState(false);
   const [presets, setPresets] = useState<PresetRecord[]>([]);
   const [savingPreset, setSavingPreset] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(() => !!containerApi?.getPanel(agentId(appId)));
   const [viewRunId, setViewRunId] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -43,11 +42,6 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
   useEffect(() => { setViewRunId(null); }, [run?.id]); // a new run takes over the console
   const loadPresets = () => ipc.listPresets(appId).then(setPresets).catch(() => {});
   useEffect(() => { loadPresets(); }, [appId]);
-  useEffect(() => {
-    if (!containerApi) return;
-    const d = containerApi.onDidRemovePanel((p) => p.id === agentId(appId) && setAgentOpen(false));
-    return () => d.dispose();
-  }, [containerApi, appId]);
   useEffect(() => { // seed history: last run of this app
     if (run) return;
     ipc.listRuns(appId, 1).then((rs) => rs[0] && useStore.getState().upsertRun(rs[0])).catch(() => {});
@@ -75,13 +69,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
   const copyCli = async () => {
     try { await navigator.clipboard.writeText(await ipc.buildCliCommand(appId, values)); notify("CLI command copied"); } catch (e) { notify(errMsg(e)); }
   };
-  const toggleAgent = () => {
-    if (!containerApi || !api) return;
-    const p = containerApi.getPanel(agentId(appId));
-    if (p) { p.api.close(); setAgentOpen(false); return; }
-    containerApi.addPanel({ id: agentId(appId), component: "agent", title: `Shell · ${app.name}`, params: { appId, initialAgentType: "custom_shell" }, position: { direction: "left", referencePanel: api.id } });
-    setAgentOpen(true);
-  };
+  const addShell = () => workspaces.get(appId)?.addShell();
   const loadPreset = (p: PresetRecord) => {
     try { setValues({ ...defaultValues(manifest), ...JSON.parse(p.inputsJson) }); } catch { notify("Preset is corrupted"); }
   };
@@ -113,7 +101,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
           </>)}
         </Dropdown>
         {containerApi && <Btn data-testid="open-in-window" onClick={() => { openAppWindow(app); useStore.getState().closeApp(app.id); }} title="Open in its own window: just the program, no panels. Closing that window exits the program; ⌘⇧D there brings it back here. Tip: drag this tab out of the dock to do the same.">⧉ Window</Btn>}
-        {containerApi && <Btn data-testid="edit-with-agent" onClick={toggleAgent} className={agentOpen ? "!border-accent text-accent" : ""} title="Open a shell in this app's folder; start an agent from there or via the selector">Edit with Agent</Btn>}
+        {containerApi && <Btn data-testid="edit-with-agent" onClick={addShell} title="Open a shell in this app's folder (⌘T); start an agent from there or via the selector">Edit with Agent</Btn>}
         {active
           ? <Btn data-testid="stop-button" variant="danger" onClick={stop} disabled={run?.status === "stopping"}>{run?.status === "stopping" ? "Stopping…" : "■ Stop"}</Btn>
           : <Btn data-testid="run-button" variant="primary" onClick={start} disabled={starting || !manifest.app.exec.trim()} title={manifest.app.exec.trim() ? "⌘↵" : "Set a run command in Manifest first"}>▶ Run</Btn>}
@@ -121,7 +109,7 @@ export default function AppPanel({ appId, api, containerApi, solo }: { appId: st
           {(close) => (<>
             <MenuEntry testid="copy-cli" close={close} onClick={copyCli} title="Copy the equivalent shell command">Copy as CLI</MenuEntry>
             <MenuEntry testid="draft-manifest" close={close} onClick={() => useStore.getState().setDraftPath(app.rootDir)} title="Draft a homemade.toml with the local model">✨ Draft manifest</MenuEntry>
-            {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={toggleAgent}>{agentOpen ? "Close agent" : "Edit with Agent"}</MenuEntry>}
+            {containerApi && <MenuEntry testid="more-edit-with-agent" close={close} onClick={addShell}>New shell</MenuEntry>}
             <MenuEntry testid="reveal-app" close={close} onClick={() => ipc.revealInFinder(app.rootDir).catch((e) => notify(errMsg(e)))}>Reveal in Finder</MenuEntry>
             <div className="my-1 border-t border-line" />
             <MenuEntry testid="remove-app" close={close} danger onClick={() => setRemoving(true)} title="Remove app from Homemade">Remove…</MenuEntry>
